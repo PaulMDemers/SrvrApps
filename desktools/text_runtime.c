@@ -167,7 +167,7 @@ static void dialog_tick(struct desk_window_owner *owner) {
     int wanted=!owner->retired && (t->modal || t->picker_mode || t->prompt_mode);
     const char *title=t->picker_mode?(t->picker_mode==DESK_PICKER_SAVE?"Save document":"Open document"):
         t->prompt_mode?(t->prompt_mode==DESK_FILE_COPY?"Duplicate file":"Rename item"):
-        t->role==DESK_APP_FILES?"Delete item":t->modal==2?"Replace file":"Unsaved document";
+        t->role==DESK_APP_FILES?(t->modal==4?"Open With":"Delete item"):t->modal==2?"Replace file":"Unsaved document";
     int ready=desk_dialog_window_sync(&owner->dialog,&t->window,wanted,title,
         t->picker_mode?720:560,t->picker_mode?480:280);
     int previous_separate=t->dialog_separate;
