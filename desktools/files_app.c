@@ -261,6 +261,20 @@ int tool_listing_decode(struct tool *t) {
     return desk_listing_decode(t->entries,t->items,t->details,t->job.incoming,t->job.response.length,t->job.response.count);
 }
 
+static void file_request_failed(struct tool *t,const char *message) {
+    /* Selection and success feedback belong only to the mutation's immediate
+     * refresh. Once that request fails, neither may affect later navigation. */
+    char status[sizeof(t->status)];
+    if(t->file_notice[0]) {
+        snprintf(status,sizeof(status),"%s, but the folder refresh failed. %s",t->file_notice,message);
+        message=status;
+    }
+    t->file_select_name[0]=t->file_notice[0]=0;t->location_pending=-1;
+    tool_status(t,message);
+    if(t->saved_path[0]) desk_text_buffer_set(&t->path_text,t->saved_path,strlen(t->saved_path));
+    tool_layout(t);
+}
+
 void tool_files_finish(struct tool *t,int result) {
     if(t->job.request.operation==DESK_FILE_STAT) { tool_files_info_finish(t,result);return; }
     if(result<0 || t->job.response.status) {
@@ -271,19 +285,17 @@ void tool_files_finish(struct tool *t,int result) {
         else if(t->job.response.status==DESK_FILE_BUSY) message="The item is open in another process. Close it and try again.";
         else if(t->job.response.status==DESK_FILE_TOO_LARGE) message="Duplicate supports individual files up to 16 MiB.";
         else if(t->job.request.operation>=DESK_FILE_RENAME) message="The change could not be verified. Refresh before retrying. Folders must be empty and the volume writable.";
-        t->location_pending=-1;tool_status(t,message);
-        if(t->saved_path[0]) desk_text_buffer_set(&t->path_text,t->saved_path,strlen(t->saved_path));
-        tool_layout(t);return;
+        file_request_failed(t,message);return;
     }
     if(t->job.request.operation==DESK_FILE_MKDIR || t->job.request.operation>=DESK_FILE_RENAME) {
         snprintf(t->file_notice,sizeof(t->file_notice),"%s",t->job.request.operation==DESK_FILE_DELETE?"Item deleted":
             t->job.request.operation==DESK_FILE_RENAME?"Item renamed":t->job.request.operation==DESK_FILE_COPY?"Copy verified":"Folder created");
-        list_directory(t,t->saved_path);return;
+        if(list_directory(t,t->saved_path)) file_request_failed(t,"Refresh the folder before trying another change.");
+        return;
     }
     int count=tool_listing_decode(t);
     if(count<0) {
-        t->location_pending=-1;tool_status(t,"The folder listing was invalid.");
-        desk_text_buffer_set(&t->path_text,t->saved_path,strlen(t->saved_path));tool_layout(t);return;
+        file_request_failed(t,"The folder listing was invalid.");return;
     }
     location_commit(t);
     if(strcmp(t->saved_path,t->job.request.path)) desk_table_rows(&t->table,NULL,0);
