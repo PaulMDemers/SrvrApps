@@ -108,8 +108,14 @@ void tool_settings_display(struct tool *t,const struct desk_packet *p) {
     else if(old_phase) tool_status(t,"Display trial ended.");
     /* Reveal the confirmation once; subsequent countdown updates must not
      * pull the user away if they scroll elsewhere during the trial. */
-    if(old_phase!=DESK_DISPLAY_TRIAL && next.phase==DESK_DISPLAY_TRIAL)
-        desk_scrollbar_scroll(&t->settings_scroll,desk_scrollbar_limit(&t->settings_scroll));
+    if(old_phase!=DESK_DISPLAY_TRIAL && next.phase==DESK_DISPLAY_TRIAL) {
+        /* The heading begins at content y=1610 (1682 in the narrow layout).
+         * If the viewport is exceptionally short, prioritize the buttons. */
+        int section=t->window.width>=372?1610:1682;
+        int height=viewport(t).h;
+        int target=section+(height<144?144-height:0);
+        desk_scrollbar_scroll(&t->settings_scroll,target-t->settings_scroll.offset);
+    }
     if(!was_ready || old_phase!=next.phase || geometry_changed || (p->serial && t->display_operation!=DESK_DISPLAY_QUERY)) tool_layout(t);
     else t->window.dirty=1;
 }
