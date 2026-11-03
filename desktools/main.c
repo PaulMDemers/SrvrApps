@@ -3,14 +3,13 @@
 #include "calculator.h"
 #include "timing.h"
 #include <srvros/desk_log.h>
+#include <srvros/desktop_apps.h>
 #include <srvros/sys.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 static struct tool app;
-static const char *roles[]={"files","text","calculator","system","settings"};
-static const char *titles[]={"Files","Text — Untitled","Calculator","System","Settings"};
 void tool_status(struct tool *t,const char *message) {
     snprintf(t->status,sizeof(t->status),"%s",message);if(t->picker_mode) desk_picker_message(&t->picker,message);
     if(t->prompt_mode) snprintf(t->prompt.dialog.message,sizeof(t->prompt.dialog.message),"%s",message);t->window.dirty=1;
@@ -235,11 +234,11 @@ int tool_runtime_file_poll(struct tool *t,uint64_t *logged_job) {
     int submitted=desk_file_job_submit(&t->job);
     if(submitted>0 && *logged_job!=t->job.request.id) {
         *logged_job=t->job.request.id;
-        desk_log("desktools: file-submitted role=%s op=%u id=%llu worker=%llu\n",roles[t->role-1],t->job.request.operation,
+        desk_log("desktools: file-submitted role=%s op=%u id=%llu worker=%llu\n",desk_application_info(t->role)->role,t->job.request.operation,
             (unsigned long long)*logged_job,(unsigned long long)t->job.pid);
     }
     int result=submitted<0?-1:submitted>0?desk_file_job_poll(&t->job):0;
-    if(result) desk_log("desktools: file-result role=%s op=%u status=%u bytes=%u\n",roles[t->role-1],t->job.request.operation,t->job.response.status,t->job.response.length);
+    if(result) desk_log("desktools: file-result role=%s op=%u status=%u bytes=%u\n",desk_application_info(t->role)->role,t->job.request.operation,t->job.response.status,t->job.response.length);
     return result;
 }
 int tool_file_pool_retire(struct desk_file_pool *pool,int role) {
@@ -249,7 +248,7 @@ int tool_file_pool_retire(struct desk_file_pool *pool,int role) {
     while(!(result=desk_file_pool_finish(pool)))srv_sleep_ticks(1);
     tool_phase_end(&phase,role,0,"pool-retire");
     desk_log("file-pool: retired role=%s spawned=%llu reaped=%llu peak=%llu live=%llu bound=%u\n",
-        roles[role-1],(unsigned long long)pool->spawned,(unsigned long long)pool->reaped,
+        desk_application_info(role)->role,(unsigned long long)pool->spawned,(unsigned long long)pool->reaped,
         (unsigned long long)pool->peak,(unsigned long long)pool->live,pool->bound);
     tool_timing_end(role,0,"pool-retire",timing);
     return result==1?0:-1;
@@ -289,7 +288,7 @@ int main(int argc,char **argv) {
     if(argc==3 && !strcmp(argv[1],"text") && !strcmp(argv[2],"--multi-window-capture"))return tool_multi_capture();
     if(argc==3 && !strcmp(argv[1],"text") && !strcmp(argv[2],"--window-growth-capture"))return tool_growth_capture();
     struct tool *t=&app;t->role=DESK_APP_TEXT;t->body_size=16;t->title_dirty=1;
-    if(argc>1) for(unsigned i=0;i<sizeof(roles)/sizeof(*roles);i++) if(!strcmp(argv[1],roles[i])) t->role=i+1;
+    if(argc>1) {unsigned role=desk_application_for_role("/fat/bin/desktools",argv[1]);if(role)t->role=role;}
     tool_timing_event(t->role,0,"main-entry");
     int controls_cancel=t->role==DESK_APP_TEXT && argc==3 && !strcmp(argv[2],"--coexist-control-files-cancel");
     int controls_files=controls_cancel || (t->role==DESK_APP_TEXT && argc==3 && !strcmp(argv[2],"--coexist-control-files"));
@@ -311,11 +310,11 @@ int main(int argc,char **argv) {
     if(pooled)t->worker_ready=desk_file_pool_init(&pool,channels,2)==0 && desk_file_job_bind(&t->job,&pool)==0;
     else if((!coexist || file_capture) && t->role==DESK_APP_TEXT)t->worker_ready=desk_file_job_init(&t->job)==0;
     tool_timing_end(t->role,0,"pool-init",timing);
-    desk_log("desktools: starting role=%s\n",roles[t->role-1]);
+    desk_log("desktools: starting role=%s\n",desk_application_info(t->role)->role);
     timing=tool_timing_begin(t->role,0,"window-open");
-    int opened=desk_app_open(&t->window,titles[t->role-1],t->role==DESK_APP_SYSTEM?760:t->role==DESK_APP_CALCULATOR?640:t->role<=2?720:560,t->role==DESK_APP_SYSTEM?500:t->role==DESK_APP_CALCULATOR?520:t->role==DESK_APP_SETTINGS?560:t->role<=2?480:320);
+    int opened=desk_app_open(&t->window,t->role==DESK_APP_TEXT?"Text — Untitled":desk_application_info(t->role)->title,t->role==DESK_APP_SYSTEM?760:t->role==DESK_APP_CALCULATOR?640:t->role<=2?720:560,t->role==DESK_APP_SYSTEM?500:t->role==DESK_APP_CALCULATOR?520:t->role==DESK_APP_SETTINGS?560:t->role<=2?480:320);
     tool_timing_end(t->role,0,"window-open",timing);if(opened)return 1;
-    desk_log("desktools: window-request role=%s pid=%llu at_us=%llu\n",roles[t->role-1],(unsigned long long)srv_getpid(),(unsigned long long)srv_monotonic_us());
+    desk_log("desktools: window-request role=%s pid=%llu at_us=%llu\n",desk_application_info(t->role)->role,(unsigned long long)srv_getpid(),(unsigned long long)srv_monotonic_us());
     timing=tool_timing_begin(t->role,t->window.window,"role-init");
     if(t->role==DESK_APP_TEXT) tool_text_init(t,!coexist && argc>2?argv[2]:"");
     else if(t->role==DESK_APP_FILES) tool_files_init(t,argc>2?argv[2]:"");
@@ -385,7 +384,7 @@ int main(int argc,char **argv) {
     timing=tool_timing_begin(t->role,t->window.window,"window-close");
     desk_app_close(&t->window);
     tool_timing_end(t->role,t->window.window,"window-close",timing);
-    desk_log("desktools: exited role=%s failure=%d\n",roles[t->role-1],t->window.failed);
+    desk_log("desktools: exited role=%s failure=%d\n",desk_application_info(t->role)->role,t->window.failed);
     tool_timing_event(t->role,0,"main-return");
     return t->window.failed?1:0;
 }
