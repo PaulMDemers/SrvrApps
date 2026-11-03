@@ -106,6 +106,10 @@ void tool_settings_display(struct tool *t,const struct desk_packet *p) {
     if(p->value!=DESK_DISPLAY_OK) tool_status(t,p->value==DESK_DISPLAY_UNSUPPORTED?"Display change is unavailable.":p->value==DESK_DISPLAY_BUSY?"Display is busy. Try again.":"Display change failed.");
     else if(next.phase) tool_status(t,"Keep these display settings?");
     else if(old_phase) tool_status(t,"Display trial ended.");
+    /* Reveal the confirmation once; subsequent countdown updates must not
+     * pull the user away if they scroll elsewhere during the trial. */
+    if(old_phase!=DESK_DISPLAY_TRIAL && next.phase==DESK_DISPLAY_TRIAL)
+        desk_scrollbar_scroll(&t->settings_scroll,desk_scrollbar_limit(&t->settings_scroll));
     if(!was_ready || old_phase!=next.phase || geometry_changed || (p->serial && t->display_operation!=DESK_DISPLAY_QUERY)) tool_layout(t);
     else t->window.dirty=1;
 }
@@ -181,7 +185,10 @@ void tool_settings_init(struct tool *t) {
 }
 void tool_settings_layout(struct tool *t) {
     struct desk_rect view=viewport(t);
+    int old_limit=desk_scrollbar_limit(&t->settings_scroll);
+    int at_bottom=old_limit>0 && t->settings_scroll.offset==old_limit;
     desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1912:1984,view.h);
+    if(at_bottom) desk_scrollbar_scroll(&t->settings_scroll,desk_scrollbar_limit(&t->settings_scroll));
     int top=64-t->settings_scroll.offset,w=t->window.width;
     int column=(w-64)/3;struct appearance_metrics metrics=appearance_metrics(t);
     for(int i=0;i<3;i++)
