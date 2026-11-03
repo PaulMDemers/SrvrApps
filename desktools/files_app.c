@@ -185,7 +185,34 @@ void tool_files_prompt(struct tool *t,struct desk_action a) {
     if(!strcmp(path,t->file_source)) { close_change(t);tool_status(t,"The name was unchanged.");return; }
     start_change(t,t->prompt_mode,path);
 }
+static void open_with(struct tool *t) {
+    if(!tool_files_open_with_enabled(t)) {tool_status(t,"Select a file first.");return;}
+    char path[DESK_FILE_PATH];
+    if(child_path(t,t->entries[t->table.body.selected].name,path)) {tool_status(t,"This path is too long to open.");return;}
+    unsigned apps[DESK_DIALOG_CHOICES-1];
+    unsigned count=desk_application_handlers(path,apps,DESK_DIALOG_CHOICES-1);
+    if(!count || count>=DESK_DIALOG_CHOICES) {tool_status(t,"No application chooser is available for this file.");return;}
+    struct desk_dialog_choice choices[DESK_DIALOG_CHOICES]={{1003,"Cancel",1}};
+    for(unsigned i=0;i<count;i++) {
+        choices[i+1].id=TOOL_OPEN_WITH_CHOICE_BASE+apps[i];choices[i+1].enabled=1;
+        snprintf(choices[i+1].label,sizeof(choices[i+1].label),"%s",desk_application_info(apps[i])->title);
+    }
+    char message[384];snprintf(message,sizeof(message),"Open %s with an application. %s is the default; this choice applies to this opening only.",t->entries[t->table.body.selected].name,desk_application_info(apps[0])->title);
+    if(desk_dialog_open(&t->dialog,"Open With",message,choices,count+1,1003,choices[1].id))return;
+    strcpy(t->file_source,path);t->modal=4;desk_popup_cancel(&t->context);
+    desk_ui_window_focus(&t->ui,0);tool_layout(t);desk_dialog_focus(&t->dialog,t->window.focused);
+    desk_log("desktools: open-with shown path=%s candidates=%u default=%u\n",path,count,apps[0]);
+}
 void tool_files_dialog(struct tool *t,unsigned id) {
+    if(t->modal==4) {
+        if(id==1003) {desk_log("desktools: open-with canceled path=%s\n",t->file_source);close_change(t);tool_status(t,"Opening canceled.");return;}
+        if(id<TOOL_OPEN_WITH_CHOICE_BASE)return;
+        unsigned app=id-TOOL_OPEN_WITH_CHOICE_BASE;
+        if(!desk_application_document_rank(app,t->file_source))return;
+        char path[DESK_FILE_PATH];strcpy(path,t->file_source);close_change(t);
+        desk_log("desktools: open-with selected app=%u key=%s path=%s\n",app,desk_application_info(app)->key,path);
+        tool_launch(t,app,path);return;
+    }
     if(t->modal!=3) return;
     if(id==1003) { close_change(t);tool_status(t,"Delete canceled. The item was kept.");desk_log("desktools: files-delete-canceled\n"); }
     else if(id==1004) start_change(t,DESK_FILE_DELETE,NULL);
@@ -201,6 +228,7 @@ void tool_files_action(struct tool *t,struct desk_action a) {
     if(a.id==TOOL_PATH && (a.flags&DESK_EDIT_SUBMIT)) { list_directory(t,t->path_text.data);return; }
     if(!(a.flags&DESK_WIDGET_ACTIVATED) && !(a.id==TOOL_NAME && (a.flags&DESK_EDIT_SUBMIT))) return;
     if(a.id==TOOL_FIND) { tool_launch(t,DESK_APP_FIND,t->saved_path);return; }
+    if(a.id==TOOL_OPEN_WITH) {open_with(t);return;}
     if(a.id==TOOL_INFO) { tool_files_info_open(t);return; }
     if(a.id==TOOL_COPY_PATH) { tool_files_copy_path(t);return; }
     if(a.id==TOOL_BACK || a.id==TOOL_FORWARD) {
