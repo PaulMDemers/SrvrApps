@@ -32,4 +32,8 @@ extraction commit groups those files without changing executable names.
 Appearance comes from each window's authoritative preference snapshot. Resolve
 `desk_app_theme()` when drawing main windows and owned dialogs; preserve content
 colors and existing document-size layout. Do not relayout or cancel capture for
-an accent-only update. See SrvrOS `docs/desktop-theme.md` for the shared contract.
+an appearance-only update. Settings starts with actual toolkit previews for
+Silver, Aero and Aqua; style, accent and glass use the same authoritative
+preference acknowledgment and persistence path. This revision requires SrvrOS
+desktop protocol v17 and the matching SrvrUI profile resolver. See SrvrOS
+`docs/desktop-theme.md` for the shared contract.
