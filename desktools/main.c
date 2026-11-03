@@ -180,6 +180,7 @@ void tool_runtime_event(struct tool *t,struct desk_packet p) {
     if(p.type==DESK_CLIPBOARD_ACK || p.type==DESK_CLIPBOARD_DATA) {
         int result=desk_clipboard_receive(&t->clip,&p);if(result) tool_clipboard_result(t,result);
     } else if(p.type==DESK_CONFIGURE) { tool_layout(t);if(t->role==DESK_APP_TEXT || t->role==DESK_APP_CALCULATOR) desk_ui_focus(&t->ui,TOOL_BODY); }
+    else if(p.type==DESK_DISPLAY_STATE && t->role==DESK_APP_SETTINGS) tool_settings_display(t,&p);
     else if(p.type==DESK_AUDIO && t->role==DESK_APP_SETTINGS) tool_settings_audio(t,&p);
     else if(p.type==DESK_BRIGHTNESS && t->role==DESK_APP_SETTINGS) tool_settings_brightness(t,&p);
     else if(p.type==DESK_PREFERENCES) {
