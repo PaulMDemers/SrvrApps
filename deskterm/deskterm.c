@@ -96,14 +96,21 @@ static void start(void) {
     network_trial=0; /* New sessions always open a normal shell. */
     /* Keep per-window command history in memory. Empty HISTFILE explicitly
      * disables disk history, avoiding cross-session overwrites. */
-    char home[192],pwd[192];snprintf(home,sizeof(home),"HOME=%s",desk_home());
-    snprintf(pwd,sizeof(pwd),"PWD=%s",desk_home());
-    char *environment[]={"PATH=/fat/bin:/:/fat",home,pwd,"TERM=vt100","HISTFILE=","PS1=\\w $ ",NULL};
-    struct srv_exec_request request={.path=argv[0],.argv=argv,.envp=environment,
+    struct srv_profile_session session;struct srv_profile_environment environment;
+    char pwd[sizeof(session.home)+4];
+    if(!srv_profile_session_from_env(&session) ||
+       !srv_profile_environment_init(&environment,&session,"/fat/bin:/:/fat")) goto failed;
+    snprintf(pwd,sizeof(pwd),"PWD=%s",session.home);
+    environment.envp[environment.count++]=pwd;
+    environment.envp[environment.count++]="TERM=vt100";
+    environment.envp[environment.count++]="HISTFILE=";
+    environment.envp[environment.count++]="PS1=\\w $ ";
+    environment.envp[environment.count]=NULL;
+    struct srv_exec_request request={.path=argv[0],.argv=argv,.envp=environment.envp,
         .flags=SRV_EXEC_BACKGROUND,.stdin_fd=pair[1],.stdout_fd=pair[1],.stderr_fd=pair[1],
         .process_group=UINT64_MAX,.foreground=1};
     char previous[160];
-    if(!getcwd(previous,sizeof(previous)) || chdir(desk_home())<0) goto failed;
+    if(!getcwd(previous,sizeof(previous)) || chdir(session.home)<0) goto failed;
     long pid=srv_exec(&request);
     (void)chdir(previous);
     if(pid<=0) goto failed;
