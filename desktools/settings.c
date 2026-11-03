@@ -8,6 +8,10 @@ static struct appearance_metrics appearance_metrics(struct tool *t) {
     if(viewport(t).h<160) return (struct appearance_metrics){52,92,15,19,9,31,16};
     return (struct appearance_metrics){68,108,19,26,12,43,18};
 }
+static int display_selection_fits(const struct tool *t) {
+    return t->display_scale && t->display_width>=640*t->display_scale &&
+        t->display_height>=480*t->display_scale;
+}
 static int visible(struct tool *t,int y,int h) {
     struct desk_rect r=viewport(t);return y>=r.y && y+h<=r.y+r.h;
 }
@@ -177,7 +181,7 @@ void tool_settings_init(struct tool *t) {
 }
 void tool_settings_layout(struct tool *t) {
     struct desk_rect view=viewport(t);
-    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1880:1952,view.h);
+    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1912:1984,view.h);
     int top=64-t->settings_scroll.offset,w=t->window.width;
     int column=(w-64)/3;struct appearance_metrics metrics=appearance_metrics(t);
     for(int i=0;i<3;i++)
@@ -205,10 +209,10 @@ void tool_settings_layout(struct tool *t) {
     int display=py+710,ready=t->display_ready && !t->display_pending;
     int trial=t->display.phase==DESK_DISPLAY_TRIAL;
     desk_button_configure(&t->buttons[18],(struct desk_rect){24,display+72,140,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_MODE_SET) && t->display.mode_count>1 && visible(t,display+72,32));
-    desk_button_configure(&t->buttons[19],(struct desk_rect){172,display+72,w-208,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_SCALE) && visible(t,display+72,32));
-    desk_button_configure(&t->buttons[20],(struct desk_rect){24,display+112,88,32},ready && !trial && t->display_selection_dirty && (t->display_width+t->display_scale-1)/t->display_scale>=640 && (t->display_height+t->display_scale-1)/t->display_scale>=480 && visible(t,display+112,32));
-    desk_button_configure(&t->buttons[21],(struct desk_rect){24,display+112,88,32},ready && trial && visible(t,display+112,32));
-    desk_button_configure(&t->buttons[22],(struct desk_rect){120,display+112,88,32},ready && trial && visible(t,display+112,32));
+    desk_button_configure(&t->buttons[19],(struct desk_rect){172,display+72,w-208<140?w-208:140,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_SCALE) && visible(t,display+72,32));
+    desk_button_configure(&t->buttons[20],trial?(struct desk_rect){0}:(struct desk_rect){24,display+112,88,32},ready && !trial && t->display_selection_dirty && display_selection_fits(t) && visible(t,display+112,32));
+    desk_button_configure(&t->buttons[21],!trial?(struct desk_rect){0}:(struct desk_rect){24,display+112,88,32},ready && trial && visible(t,display+112,32));
+    desk_button_configure(&t->buttons[22],!trial?(struct desk_rect){0}:(struct desk_rect){120,display+112,88,32},ready && trial && visible(t,display+112,32));
     int sound=py+420,available=audio_available(t),controls=available && !(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY);
     desk_slider_configure(&t->audio_volume,(struct desk_rect){24,sound+76,w-72,32},controls && visible(t,sound+76,32));
     desk_check_configure(&t->checks[11],(struct desk_rect){24,sound+120,120,32},controls && visible(t,sound+120,32),t->audio.output==0,1);
@@ -278,6 +282,8 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     else if(t->display_selection_dirty) snprintf(label,sizeof(label),"Selected: %u x %u · %ux",t->display_width,t->display_height,t->display_scale);
     else snprintf(label,sizeof(label),"%s",(t->display.capabilities&DESK_DISPLAY_CAP_MODE_SET)?"Choose display settings.":"Resolution switching unavailable.");
     desk_label_draw(c,(struct desk_rect){24,display+152,c->width-64,28},theme->body,label,theme->muted);
+    if(t->display_ready && t->display_selection_dirty && t->display_scale==2 && !display_selection_fits(t))
+        desk_label_draw(c,(struct desk_rect){24,display+184,c->width-64,28},theme->body,"2× needs at least 1280 × 960.",theme->muted);
     desk_ui_draw(c,&t->ui,theme);c->clip=old;
     if(desk_scrollbar_limit(&t->settings_scroll)>0) desk_scrollbar_draw(c,&t->settings_scroll,theme);
 }
