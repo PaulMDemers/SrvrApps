@@ -103,7 +103,7 @@ void tool_settings_init(struct tool *t) {
     t->brightness_percent=-1;desk_slider_init(&t->brightness);desk_slider_range(&t->brightness,5,100,1);
     desk_ui_add(&t->ui,SETTINGS_BRIGHTNESS,DESK_CONTROL_SLIDER,&t->brightness,NULL);
     t->preferences=desk_preferences_default();t->preferences_status=DESK_PREF_LOADING;offset_text(t);
-    static const char *labels[]={"Standard","Larger","24-hour clock","Show date","Sage","Sand","Slate"};
+    static const char *labels[]={"Standard","Larger","24-hour clock","Show date","Blue","Sand","Slate"};
     for(unsigned i=0;i<7;i++) desk_ui_add(&t->ui,i+1,DESK_CONTROL_CHECK,&t->checks[i],labels[i]);
     desk_slider_init(&t->pointer_speed);desk_slider_range(&t->pointer_speed,1,5,1);
     desk_ui_add(&t->ui,SETTINGS_POINTER_SPEED,DESK_CONTROL_SLIDER,&t->pointer_speed,NULL);
