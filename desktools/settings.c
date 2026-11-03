@@ -8,6 +8,10 @@ static struct appearance_metrics appearance_metrics(struct tool *t) {
     if(viewport(t).h<160) return (struct appearance_metrics){52,92,15,19,9,31,16};
     return (struct appearance_metrics){68,108,19,26,12,43,18};
 }
+static int display_selection_fits(const struct tool *t) {
+    return t->display_scale && t->display_width>=640*t->display_scale &&
+        t->display_height>=480*t->display_scale;
+}
 static int visible(struct tool *t,int y,int h) {
     struct desk_rect r=viewport(t);return y>=r.y && y+h<=r.y+r.h;
 }
@@ -68,7 +72,60 @@ void tool_settings_audio(struct tool *t,const struct desk_packet *p) {
         }
     }
 }
+static void display_request(struct tool *t,unsigned operation) {
+    if(t->display_pending) return;
+    struct desk_packet p=desk_packet_new(DESK_DISPLAY);
+    p.serial=++t->display_serial;p.value=operation;
+    p.width=t->display_width;p.height=t->display_height;p.x=(int32_t)t->display_scale;
+    p.generation=t->display_token;
+    t->display_operation=(int)operation;t->display_at=srv_ticks();t->display_pending=!desk_send(t->window.server,&p);
+    if(!t->display_pending) tool_status(t,"Display request could not be sent.");
+}
+void tool_settings_display(struct tool *t,const struct desk_packet *p) {
+    if(p->serial && (!t->display_pending || p->serial!=t->display_serial)) return;
+    struct desk_display_state next;memcpy(&next,p->text,sizeof(next));
+    if(next.mode_count>DESK_DISPLAY_MODES || next.phase>DESK_DISPLAY_TRIAL ||
+       (next.scale!=1 && next.scale!=2) || !next.width || !next.height ||
+       (next.capabilities&~(DESK_DISPLAY_CAP_MODE_SET|DESK_DISPLAY_CAP_SCALE)) ||
+       p->value>DESK_DISPLAY_FAILED || (next.phase==DESK_DISPLAY_TRIAL && !p->generation)) {
+        if(p->serial) t->display_pending=0;
+        tool_status(t,"Display state is unavailable.");return;
+    }
+    for(unsigned i=0;i<next.mode_count;i++) if(!next.modes[i].width || !next.modes[i].height) {
+        if(p->serial) t->display_pending=0;
+        tool_status(t,"Display state is unavailable.");return;
+    }
+    unsigned old_phase=t->display.phase;int was_ready=t->display_ready;
+    int geometry_changed=next.width!=t->display.width || next.height!=t->display.height || next.scale!=t->display.scale || next.capabilities!=t->display.capabilities || next.mode_count!=t->display.mode_count;
+    if(p->serial) t->display_pending=0;
+    t->display=next;t->display_token=p->generation;t->display_ready=1;
+    if(!was_ready || old_phase || next.phase || !t->display_selection_dirty) {
+        t->display_width=next.width;t->display_height=next.height;t->display_scale=next.scale;
+        t->display_selection_dirty=0;
+    }
+    if(p->value!=DESK_DISPLAY_OK) tool_status(t,p->value==DESK_DISPLAY_UNSUPPORTED?"Display change is unavailable.":p->value==DESK_DISPLAY_BUSY?"Display is busy. Try again.":"Display change failed.");
+    else if(next.phase) tool_status(t,"Keep these display settings?");
+    else if(old_phase) tool_status(t,"Display trial ended.");
+    /* Reveal the confirmation once; subsequent countdown updates must not
+     * pull the user away if they scroll elsewhere during the trial. */
+    if(old_phase!=DESK_DISPLAY_TRIAL && next.phase==DESK_DISPLAY_TRIAL) {
+        /* The heading begins at content y=1610 (1682 in the narrow layout).
+         * If the viewport is exceptionally short, prioritize the buttons. */
+        int section=t->window.width>=372?1610:1682;
+        int height=viewport(t).h;
+        int target=section+(height<144?144-height:0);
+        desk_scrollbar_scroll(&t->settings_scroll,target-t->settings_scroll.offset);
+    }
+    if(!was_ready || old_phase!=next.phase || geometry_changed || (p->serial && t->display_operation!=DESK_DISPLAY_QUERY)) tool_layout(t);
+    else t->window.dirty=1;
+}
 void tool_settings_tick(struct tool *t) {
+    if(t->display_pending && (uint64_t)srv_ticks()-t->display_at>500) {
+        t->display_pending=0;t->display_ready=0;tool_status(t,"Display request was not confirmed.");
+    }
+    if(t->window.server && !t->display_pending && (!t->display_serial || (!t->display_ready && (uint64_t)srv_ticks()-t->display_at>=500) ||
+       (t->display.phase==DESK_DISPLAY_TRIAL && (uint64_t)srv_ticks()-t->display_at>=100)))
+        display_request(t,DESK_DISPLAY_QUERY);
     if(t->appearance_pending && (uint64_t)srv_ticks()-t->appearance_at>500) {
         t->appearance_pending=0;tool_status(t,"Appearance request was not confirmed. Try again.");
     }
@@ -125,11 +182,19 @@ void tool_settings_init(struct tool *t) {
     desk_ui_add(&t->ui,SETTINGS_AUDIO_HEADPHONES,DESK_CONTROL_CHECK,&t->checks[12],"Headphones");
     desk_ui_add(&t->ui,SETTINGS_AUDIO_TEST,DESK_CONTROL_BUTTON,&t->buttons[16],"Test sound");
     desk_ui_add(&t->ui,SETTINGS_AUDIO_STOP,DESK_CONTROL_BUTTON,&t->buttons[17],"Stop");
+    desk_ui_add(&t->ui,SETTINGS_DISPLAY_MODE,DESK_CONTROL_BUTTON,&t->buttons[18],"Next resolution");
+    desk_ui_add(&t->ui,SETTINGS_DISPLAY_SCALE,DESK_CONTROL_BUTTON,&t->buttons[19],"Change scale");
+    desk_ui_add(&t->ui,SETTINGS_DISPLAY_APPLY,DESK_CONTROL_BUTTON,&t->buttons[20],"Apply");
+    desk_ui_add(&t->ui,SETTINGS_DISPLAY_KEEP,DESK_CONTROL_BUTTON,&t->buttons[21],"Keep");
+    desk_ui_add(&t->ui,SETTINGS_DISPLAY_REVERT,DESK_CONTROL_BUTTON,&t->buttons[22],"Revert");
     tool_status(t,"Loading saved preferences…");
 }
 void tool_settings_layout(struct tool *t) {
     struct desk_rect view=viewport(t);
-    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1660:1732,view.h);
+    int old_limit=desk_scrollbar_limit(&t->settings_scroll);
+    int at_bottom=old_limit>0 && t->settings_scroll.offset==old_limit;
+    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1912:1984,view.h);
+    if(at_bottom) desk_scrollbar_scroll(&t->settings_scroll,desk_scrollbar_limit(&t->settings_scroll));
     int top=64-t->settings_scroll.offset,w=t->window.width;
     int column=(w-64)/3;struct appearance_metrics metrics=appearance_metrics(t);
     for(int i=0;i<3;i++)
@@ -154,6 +219,13 @@ void tool_settings_layout(struct tool *t) {
             visible(t,row,32),t->preferences.wallpaper==(unsigned)i,1);
     }
     int py=y+(w>=372?460:532);
+    int display=py+710,ready=t->display_ready && !t->display_pending;
+    int trial=t->display.phase==DESK_DISPLAY_TRIAL;
+    desk_button_configure(&t->buttons[18],(struct desk_rect){24,display+72,140,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_MODE_SET) && t->display.mode_count>1 && visible(t,display+72,32));
+    desk_button_configure(&t->buttons[19],(struct desk_rect){172,display+72,w-208<140?w-208:140,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_SCALE) && visible(t,display+72,32));
+    desk_button_configure(&t->buttons[20],trial?(struct desk_rect){0}:(struct desk_rect){24,display+112,88,32},ready && !trial && t->display_selection_dirty && display_selection_fits(t) && visible(t,display+112,32));
+    desk_button_configure(&t->buttons[21],!trial?(struct desk_rect){0}:(struct desk_rect){24,display+112,88,32},ready && trial && visible(t,display+112,32));
+    desk_button_configure(&t->buttons[22],!trial?(struct desk_rect){0}:(struct desk_rect){120,display+112,88,32},ready && trial && visible(t,display+112,32));
     int sound=py+420,available=audio_available(t),controls=available && !(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY);
     desk_slider_configure(&t->audio_volume,(struct desk_rect){24,sound+76,w-72,32},controls && visible(t,sound+76,32));
     desk_check_configure(&t->checks[11],(struct desk_rect){24,sound+120,120,32},controls && visible(t,sound+120,32),t->audio.output==0,1);
@@ -214,6 +286,17 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     desk_label_draw(c,(struct desk_rect){24,sound+40,c->width-64,28},theme->body,label,theme->text);
     desk_label_draw(c,(struct desk_rect){24,sound+212,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY)?"Stop playback to change sound settings.":"A short, quiet test tone",theme->muted);
     desk_label_draw(c,(struct desk_rect){24,sound+248,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_JACK_SENSE)?(t->audio.headphone_present?"Headphones connected.":"No headphones detected."):(t->audio.capabilities&SRV_AUDIO_CAP_HEADPHONES)?"Choose headphones after plugging them in.":audio_available(t)?"Speaker output only.":"Sound output is unavailable in this session.",theme->muted);
+    int display=py+710;
+    desk_label_draw(c,(struct desk_rect){24,display,c->width-64,28},theme->body,"Display",theme->text);
+    if(t->display_ready) snprintf(label,sizeof(label),"Current: %u x %u · %ux",t->display.width,t->display.height,t->display.scale);
+    else snprintf(label,sizeof(label),"Display information unavailable");
+    desk_label_draw(c,(struct desk_rect){24,display+32,c->width-64,28},theme->body,label,theme->text);
+    if(t->display.phase) snprintf(label,sizeof(label),"Reverts in %u seconds",t->display.remaining_seconds);
+    else if(t->display_selection_dirty) snprintf(label,sizeof(label),"Selected: %u x %u · %ux",t->display_width,t->display_height,t->display_scale);
+    else snprintf(label,sizeof(label),"%s",(t->display.capabilities&DESK_DISPLAY_CAP_MODE_SET)?"Choose display settings.":"Resolution switching unavailable.");
+    desk_label_draw(c,(struct desk_rect){24,display+152,c->width-64,28},theme->body,label,theme->muted);
+    if(t->display_ready && t->display_selection_dirty && t->display_scale==2 && !display_selection_fits(t))
+        desk_label_draw(c,(struct desk_rect){24,display+184,c->width-64,28},theme->body,"2× needs at least 1280 × 960.",theme->muted);
     desk_ui_draw(c,&t->ui,theme);c->clip=old;
     if(desk_scrollbar_limit(&t->settings_scroll)>0) desk_scrollbar_draw(c,&t->settings_scroll,theme);
 }
@@ -230,7 +313,17 @@ static void request(struct tool *t,const struct desk_preferences *value,unsigned
 void tool_settings_action(struct tool *t,struct desk_action a) {
     int activated=(a.flags&DESK_WIDGET_ACTIVATED)!=0;
     struct desk_preferences value=t->preferences;
-    if(activated && a.id>=SETTINGS_ACCENT_BLUE && a.id<=SETTINGS_STYLE_AQUA) {
+    if(activated && a.id==SETTINGS_DISPLAY_MODE && t->buttons[18].enabled) {
+        unsigned i=0;while(i<t->display.mode_count && (t->display.modes[i].width!=t->display_width || t->display.modes[i].height!=t->display_height)) i++;
+        i=i<t->display.mode_count?(i+1)%t->display.mode_count:0;t->display_width=t->display.modes[i].width;t->display_height=t->display.modes[i].height;
+        t->display_selection_dirty=t->display_width!=t->display.width || t->display_height!=t->display.height || t->display_scale!=t->display.scale;tool_layout(t);
+    } else if(activated && a.id==SETTINGS_DISPLAY_SCALE && t->buttons[19].enabled) {
+        t->display_scale=t->display_scale==1?2:1;
+        t->display_selection_dirty=t->display_width!=t->display.width || t->display_height!=t->display.height || t->display_scale!=t->display.scale;tool_layout(t);
+    } else if(activated && a.id==SETTINGS_DISPLAY_APPLY && t->buttons[20].enabled) { display_request(t,DESK_DISPLAY_APPLY);tool_layout(t);
+    } else if(activated && a.id==SETTINGS_DISPLAY_KEEP && t->buttons[21].enabled) { display_request(t,DESK_DISPLAY_KEEP);tool_layout(t);
+    } else if(activated && a.id==SETTINGS_DISPLAY_REVERT && t->buttons[22].enabled) { display_request(t,DESK_DISPLAY_REVERT);tool_layout(t);
+    } else if(activated && a.id>=SETTINGS_ACCENT_BLUE && a.id<=SETTINGS_STYLE_AQUA) {
         unsigned mask=a.id<=SETTINGS_ACCENT_TEAL?DESK_PREF_ACCENT:a.id<=SETTINGS_GLASS_CLEAR?DESK_PREF_GLASS:DESK_PREF_STYLE;
         value=t->preferences;
         if(mask==DESK_PREF_ACCENT) value.theme_accent=a.id-SETTINGS_ACCENT_BLUE;

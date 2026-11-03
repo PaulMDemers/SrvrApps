@@ -18,6 +18,7 @@ enum tool_action { TOOL_NEW=1,TOOL_OPEN,TOOL_SAVE,TOOL_PATH,TOOL_BODY,TOOL_UP,TO
 #define TOOL_OPEN_WITH_CHOICE_BASE 1100u
 enum { SYSTEM_TABLE=40,SYSTEM_PAUSE,SYSTEM_REFRESH,SYSTEM_TABS,SYSTEM_NETWORK_TABLE,SYSTEM_PROCESSES,SYSTEM_NETWORK,SYSTEM_DIAGNOSTICS,SYSTEM_DEVICES,SYSTEM_DEVICE_TABLE,SYSTEM_SENSORS,SYSTEM_SENSOR_TABLE,SYSTEM_BATTERY_START,SYSTEM_BATTERY_STOP };
 enum { SETTINGS_POINTER_SPEED=100,SETTINGS_POINTER_ACCELERATION,SETTINGS_BRIGHTNESS,SETTINGS_DISABLE_WHILE_TYPING,SETTINGS_TAP_CLICK,SETTINGS_TWO_FINGER_TAP,SETTINGS_AUDIO_VOLUME,SETTINGS_AUDIO_SPEAKERS,SETTINGS_AUDIO_HEADPHONES,SETTINGS_AUDIO_TEST,SETTINGS_AUDIO_STOP };
+enum { SETTINGS_DISPLAY_MODE=200,SETTINGS_DISPLAY_SCALE,SETTINGS_DISPLAY_APPLY,SETTINGS_DISPLAY_KEEP,SETTINGS_DISPLAY_REVERT };
 enum { SETTINGS_ACCENT_BLUE=400,SETTINGS_ACCENT_GRAPHITE,SETTINGS_ACCENT_TEAL,SETTINGS_GLASS_SOLID,SETTINGS_GLASS_SUBTLE,SETTINGS_GLASS_CLEAR,SETTINGS_STYLE_SILVER,SETTINGS_STYLE_AERO,SETTINGS_STYLE_AQUA };
 enum { CALC_EVALUATE=70,CALC_CLEAR,CALC_USE,CALC_COPY,CALC_HISTORY,CALC_KEY_FIRST=300 };
 #define CALC_HISTORY_LIMIT 16
@@ -54,6 +55,10 @@ struct tool {
     unsigned audio_queued_op,audio_queued_value,audio_watch_op;
     int brightness_percent,brightness_pending,brightness_refresh;
     uint64_t brightness_serial,brightness_at;
+    struct desk_display_state display;
+    uint32_t display_width,display_height,display_scale;
+    uint64_t display_serial,display_at,display_token;
+    int display_pending,display_ready,display_selection_dirty,display_operation;
     struct desk_scrollbar settings_scroll;
     struct desk_preferences preferences;
     unsigned preferences_status,appearance_pending;
@@ -129,6 +134,7 @@ void tool_system_draw(struct tool *tool,struct desk_canvas *canvas);
 void tool_system_action(struct tool *tool,struct desk_action action);
 void tool_settings_tick(struct tool *t);
 void tool_settings_audio(struct tool *t,const struct desk_packet *p);
+void tool_settings_display(struct tool *t,const struct desk_packet *p);
 void tool_settings_brightness(struct tool *t,const struct desk_packet *p);
 void tool_settings_init(struct tool *tool);
 void tool_settings_layout(struct tool *tool);
