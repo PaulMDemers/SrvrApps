@@ -102,8 +102,9 @@ void tool_files_info_key(struct tool *t,const struct srv_key_event *key) {
     tool_files_info_action(t,desk_ui_key(&t->info_ui,key));
 }
 void tool_files_info_draw(struct tool *t,struct desk_canvas *canvas) {
-    desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},desk_theme_quiet.surface);
-    desk_label_draw(canvas,(struct desk_rect){16,16,canvas->width-32,28},desk_theme_quiet.heading,"Information",desk_theme_quiet.text);
-    desk_ui_draw(canvas,&t->info_ui,&desk_theme_quiet);
-    desk_label_ellipsis(canvas,(struct desk_rect){16,canvas->height-24,canvas->width-32,22},desk_theme_quiet.body,t->info_notice,desk_theme_quiet.muted);
+    struct desk_theme resolved=desk_app_theme(&t->window);
+    desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},resolved.surface);
+    desk_label_draw(canvas,(struct desk_rect){16,16,canvas->width-32,28},resolved.heading,"Information",resolved.text);
+    desk_ui_draw(canvas,&t->info_ui,&resolved);
+    desk_label_ellipsis(canvas,(struct desk_rect){16,canvas->height-24,canvas->width-32,22},resolved.body,t->info_notice,resolved.muted);
 }

@@ -91,11 +91,12 @@ void tool_files_layout(struct tool *t) {
     desk_button_configure(&t->buttons[3],(struct desk_rect){w-132,h-73,116,28},!busy);
 }
 void tool_files_draw(struct tool *t,struct desk_canvas *c) {
+    struct desk_theme resolved=desk_app_theme(&t->window);
     if(t->window.width>=640) {
-        desk_fill(c,(struct desk_rect){16,102,132,t->window.height-190},desk_theme_quiet.track);
-        desk_label_draw(c,(struct desk_rect){24,106,116,24},desk_theme_quiet.body,"Places",desk_theme_quiet.muted);
+        desk_fill(c,(struct desk_rect){16,102,132,t->window.height-190},resolved.track);
+        desk_label_draw(c,(struct desk_rect){24,106,116,24},resolved.body,"Places",resolved.muted);
     }
-    desk_ui_draw(c,&t->ui,&desk_theme_quiet);
+    desk_ui_draw(c,&t->ui,&resolved);
 }
 void tool_files_init(struct tool *t,const char *path) {
     t->location_index=t->location_pending=-1;

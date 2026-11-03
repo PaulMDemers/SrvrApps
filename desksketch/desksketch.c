@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_paths.h>
 #include <srvros/desk_app.h>
 #include <srvros/desk_ui.h>
@@ -286,7 +287,7 @@ static void menus(void) {
     desk_app_menus(&app.window,items,sizeof(items)/sizeof(*items));desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *c) {
-    struct desk_theme *t=&app.theme;desk_fill(c,(struct desk_rect){0,0,c->width,c->height},t->surface);desk_ui_draw(c,&app.ui,t);
+    app.theme=desk_app_theme(&app.window);if(app.window.preferences_valid && app.window.preferences.text_size==20) app.theme.body=&desk_font_20;struct desk_theme *t=&app.theme;desk_fill(c,(struct desk_rect){0,0,c->width,c->height},t->surface);desk_ui_draw(c,&app.ui,t);
     char brush[24],detail[120];snprintf(brush,sizeof(brush),"Size %u",app.paint.size);
     desk_label_draw(c,(struct desk_rect){12,86,68,24},&desk_font_16,brush,t->text);
     if(c->width>=400) { desk_fill(c,(struct desk_rect){c->width-64,86,48,22},t->border);desk_fill(c,(struct desk_rect){c->width-62,88,44,18},app.paint.color); }
@@ -318,7 +319,7 @@ int main(int argc,char **argv) {
                 layout();desk_ui_focus(&app.ui,SK_CANVAS);
                 if(!app.started) { app.started=1;if(argc>2 && argv[2][0]) load_image(argv[2]); }
             } else if(p.type==DESK_FOCUS) focus_changed();
-            else if(p.type==DESK_PREFERENCES) { struct desk_preferences preferences;memcpy(&preferences,p.text,sizeof(preferences));app.theme.body=preferences.text_size==20?&desk_font_20:&desk_font_16;layout(); }
+            else if(p.type==DESK_PREFERENCES) { struct desk_preferences preferences;memcpy(&preferences,p.text,sizeof(preferences));if(app.theme.body!=(preferences.text_size==20?&desk_font_20:&desk_font_16)) { app.theme.body=preferences.text_size==20?&desk_font_20:&desk_font_16;layout(); } }
             else if(p.type==DESK_MENU_ACTION) action((struct desk_action){p.value,DESK_WIDGET_ACTIVATED});
             else if(p.type==DESK_KEY) { struct srv_key_event k;memcpy(&k,p.text,sizeof(k));key(&k); }
             else if(p.type==DESK_POINTER) {

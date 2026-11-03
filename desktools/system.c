@@ -282,7 +282,7 @@ void tool_system_action(struct tool *t,struct desk_action a) {
     }
 }
 void tool_system_draw(struct tool *t,struct desk_canvas *c) {
-    const struct desk_theme *theme=&desk_theme_quiet;
+    struct desk_theme resolved=desk_app_theme(&t->window);const struct desk_theme *theme=&resolved;
     desk_label_draw(c,(struct desk_rect){16,18,c->width-(c->width>=500?352:224),30},theme->heading,"System",theme->text);
     if(desk_tabs_selected(&t->system_tabs)==SYSTEM_NETWORK) {
         desk_label_draw(c,(struct desk_rect){16,98,c->width-32,26},theme->body,network_state(t),theme->text);return;

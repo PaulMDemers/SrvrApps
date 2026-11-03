@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_paths.h>
 #include <srvros/desk_app.h>
 #include <srvros/desk_connection.h>
@@ -216,7 +217,7 @@ static void menus(void) {
     desk_app_menus(&app.window,items,count);desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *c) {
-    const struct desk_theme *t=&desk_theme_quiet;desk_fill(c,(struct desk_rect){0,0,c->width,c->height},t->surface);desk_ui_draw(c,&app.ui,t);
+    struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *t=&resolved;desk_fill(c,(struct desk_rect){0,0,c->width,c->height},t->surface);desk_ui_draw(c,&app.ui,t);
     if(!app.pixels) {
         int y=app.view.frame.y+app.view.frame.h/2-24;
         desk_label_draw(c,(struct desk_rect){28,y,c->width-56,30},&desk_font_20,"Open an image",t->text);
@@ -267,8 +268,9 @@ static void dialog_tick(void) {
     if(app.window.dirty)window->dirty=1;
     struct desk_canvas canvas;
     if(desk_app_canvas(window,&canvas)==1) {
-        desk_fill(&canvas,canvas.clip,desk_theme_quiet.surface);
-        desk_picker_draw(&canvas,&app.picker,&desk_theme_quiet);desk_app_present(window);
+        struct desk_theme resolved=desk_app_theme(window);
+        desk_fill(&canvas,canvas.clip,resolved.surface);
+        desk_picker_draw(&canvas,&app.picker,&resolved);desk_app_present(window);
     }
 }
 static int preview_event(void *context,struct desk_app *window,struct desk_packet p) {

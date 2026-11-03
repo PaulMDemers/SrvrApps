@@ -64,6 +64,9 @@ void tool_settings_audio(struct tool *t,const struct desk_packet *p) {
     }
 }
 void tool_settings_tick(struct tool *t) {
+    if(t->appearance_pending && (uint64_t)srv_ticks()-t->appearance_at>500) {
+        t->appearance_pending=0;tool_status(t,"Appearance request was not confirmed. Try again.");
+    }
     if(t->window.server && !t->audio_pending) {
         if(t->audio_queued_op) {
             unsigned op=t->audio_queued_op,value=t->audio_queued_value;t->audio_queued_op=0;audio_request(t,op,value);
@@ -103,6 +106,8 @@ void tool_settings_init(struct tool *t) {
     t->brightness_percent=-1;desk_slider_init(&t->brightness);desk_slider_range(&t->brightness,5,100,1);
     desk_ui_add(&t->ui,SETTINGS_BRIGHTNESS,DESK_CONTROL_SLIDER,&t->brightness,NULL);
     t->preferences=desk_preferences_default();t->preferences_status=DESK_PREF_LOADING;offset_text(t);
+    static const char *appearance[]={"Blue","Graphite","Teal","Solid","Subtle","Clear"};
+    for(unsigned i=0;i<6;i++) desk_ui_add(&t->ui,SETTINGS_ACCENT_BLUE+i,DESK_CONTROL_CHECK,&t->checks[13+i],appearance[i]);
     static const char *labels[]={"Standard","Larger","24-hour clock","Show date","Blue","Sand","Slate"};
     for(unsigned i=0;i<7;i++) desk_ui_add(&t->ui,i+1,DESK_CONTROL_CHECK,&t->checks[i],labels[i]);
     desk_slider_init(&t->pointer_speed);desk_slider_range(&t->pointer_speed,1,5,1);
@@ -118,7 +123,7 @@ void tool_settings_init(struct tool *t) {
 }
 void tool_settings_layout(struct tool *t) {
     struct desk_rect view=viewport(t);
-    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1222:1294,view.h);
+    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1514:1586,view.h);
     int y=64-t->settings_scroll.offset,w=t->window.width;
     desk_check_configure(&t->checks[0],(struct desk_rect){24,y+52,112,32},visible(t,y+52,32),t->preferences.text_size==16,1);
     desk_check_configure(&t->checks[1],(struct desk_rect){148,y+52,96,32},visible(t,y+52,32),t->preferences.text_size==20,1);
@@ -133,6 +138,12 @@ void tool_settings_layout(struct tool *t) {
             visible(t,row,32),t->preferences.wallpaper==(unsigned)i,1);
     }
     int py=y+(w>=372?460:532);
+    int appearance=py+760;
+    for(int i=0;i<6;i++) {
+        int row=appearance+36+i*36+(i>=3?28:0);
+        desk_check_configure(&t->checks[13+i],(struct desk_rect){24,row,w-64,32},visible(t,row,32),
+            i<3?t->preferences.theme_accent==(unsigned)i:t->preferences.glass_level==(unsigned)(i-3),1);
+    }
     int sound=py+420,available=audio_available(t),controls=available && !(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY);
     desk_slider_configure(&t->audio_volume,(struct desk_rect){24,sound+76,w-72,32},controls && visible(t,sound+76,32));
     desk_check_configure(&t->checks[11],(struct desk_rect){24,sound+120,120,32},controls && visible(t,sound+120,32),t->audio.output==0,1);
@@ -148,7 +159,7 @@ void tool_settings_layout(struct tool *t) {
     desk_check_configure(&t->checks[7],(struct desk_rect){24,py+88,w-64,32},visible(t,py+88,32),t->preferences.pointer_acceleration,0);
 }
 void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
-    const struct desk_theme *theme=&desk_theme_quiet;struct desk_rect old=c->clip,view=viewport(t);
+    struct desk_theme resolved=desk_app_theme(&t->window);const struct desk_theme *theme=&resolved;struct desk_rect old=c->clip,view=viewport(t);
     desk_text(c,theme->heading,24,20,"Desktop settings",theme->text);
     desk_clip(c,desk_intersect(old,(struct desk_rect){view.x,view.y,view.w-16,view.h}));
     int y=64-t->settings_scroll.offset;
@@ -174,6 +185,8 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     desk_label_draw(c,(struct desk_rect){24,sound+40,c->width-64,28},theme->body,label,theme->text);
     desk_label_draw(c,(struct desk_rect){24,sound+212,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY)?"Stop playback to change sound settings.":"A short, quiet test tone",theme->muted);
     desk_label_draw(c,(struct desk_rect){24,sound+248,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_JACK_SENSE)?(t->audio.headphone_present?"Headphones connected.":"No headphones detected."):(t->audio.capabilities&SRV_AUDIO_CAP_HEADPHONES)?"Choose headphones after plugging them in.":audio_available(t)?"Speaker output only.":"Sound output is unavailable in this session.",theme->muted);
+    desk_label_draw(c,(struct desk_rect){24,py+760,c->width-64,28},theme->body,"Appearance · accent color",theme->text);
+    desk_label_draw(c,(struct desk_rect){24,py+904,c->width-64,28},theme->body,"Window glass",theme->text);
     desk_ui_draw(c,&t->ui,theme);c->clip=old;
     if(desk_scrollbar_limit(&t->settings_scroll)>0) desk_scrollbar_draw(c,&t->settings_scroll,theme);
 }
@@ -190,7 +203,16 @@ static void request(struct tool *t,const struct desk_preferences *value,unsigned
 void tool_settings_action(struct tool *t,struct desk_action a) {
     int activated=(a.flags&DESK_WIDGET_ACTIVATED)!=0;
     struct desk_preferences value=t->preferences;
-    if(a.id==SETTINGS_AUDIO_VOLUME && (a.flags&DESK_WIDGET_CHANGED) && audio_available(t)) {
+    if(activated && a.id>=SETTINGS_ACCENT_BLUE && a.id<=SETTINGS_GLASS_CLEAR) {
+        unsigned mask=a.id<=SETTINGS_ACCENT_TEAL?DESK_PREF_ACCENT:DESK_PREF_GLASS;
+        value=t->preferences;
+        if(mask==DESK_PREF_ACCENT) value.theme_accent=a.id-SETTINGS_ACCENT_BLUE;
+        else value.glass_level=a.id-SETTINGS_GLASS_SOLID;
+        if(desk_app_preferences(&t->window,&value,mask)) tool_status(t,"Appearance request could not be sent.");
+        else { t->appearance_requested=value;t->appearance_pending=mask;t->appearance_at=srv_ticks();tool_status(t,"Applying appearance…"); }
+        for(int i=0;i<6;i++) t->checks[13+i].checked=i<3?t->preferences.theme_accent==(unsigned)i:t->preferences.glass_level==(unsigned)(i-3);
+        t->window.dirty=1;
+    } else if(a.id==SETTINGS_AUDIO_VOLUME && (a.flags&DESK_WIDGET_CHANGED) && audio_available(t)) {
         t->audio_wanted_volume=t->audio_volume.value;
     } else if(activated && (a.id==SETTINGS_AUDIO_TEST || a.id==SETTINGS_AUDIO_STOP)) {
         audio_request(t,a.id==SETTINGS_AUDIO_TEST?SRV_AUDIO_TEST:SRV_AUDIO_STOP,0);
@@ -230,7 +252,10 @@ void tool_settings_action(struct tool *t,struct desk_action a) {
 void tool_settings_receive(struct tool *t,const struct desk_packet *packet) {
     struct desk_preferences value;memcpy(&value,packet->text,sizeof(value));
     if(!desk_preferences_valid(&value) || packet->value>DESK_PREF_CONFLICT) return;
-    int changed=memcmp(&value,&t->preferences,sizeof(value))!=0;
+    int size_changed=value.text_size!=t->preferences.text_size;
+    if(t->appearance_pending &&
+       (!(t->appearance_pending&DESK_PREF_ACCENT) || value.theme_accent==t->appearance_requested.theme_accent) &&
+       (!(t->appearance_pending&DESK_PREF_GLASS) || value.glass_level==t->appearance_requested.glass_level)) t->appearance_pending=0;
     int offset_changed=value.utc_offset_minutes!=t->preferences.utc_offset_minutes;
     t->preferences=value;t->body_size=value.text_size;t->preferences_status=packet->value;
     if(offset_changed) offset_text(t);
@@ -240,7 +265,18 @@ void tool_settings_receive(struct tool *t,const struct desk_packet *packet) {
     tool_status(t,status[packet->value]);
     /* A save acknowledgement changes status, not geometry or interaction.
      * Relayout here would disarm a click held while the worker finishes. */
-    if(changed) tool_layout(t);
+    if(size_changed) tool_layout(t);
+    else {
+        t->checks[0].checked=value.text_size==16;t->checks[1].checked=value.text_size==20;
+        t->checks[2].checked=(value.clock_flags&DESK_CLOCK_24H)!=0;t->checks[3].checked=(value.clock_flags&DESK_CLOCK_DATE)!=0;
+        for(int i=0;i<3;i++) t->checks[4+i].checked=value.wallpaper==(unsigned)i;
+        t->checks[7].checked=value.pointer_acceleration;t->checks[8].checked=value.disable_while_typing;
+        t->checks[9].checked=value.tap_to_click;t->checks[10].checked=value.two_finger_tap;
+        desk_slider_set(&t->pointer_speed,value.pointer_speed);
+        for(int i=0;i<6;i++) t->checks[13+i].checked=i<3?value.theme_accent==(unsigned)i:value.glass_level==(unsigned)(i-3);
+        t->window.dirty=1;
+    }
+    if(t->appearance_pending) tool_status(t,"Applying appearance…");
 }
 int tool_settings_pointer(struct tool *t,struct desk_widget_event e) {
     if(e.type==DESK_WIDGET_CANCEL) {

@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_app.h>
 #include <srvros/desk_ui.h>
 #include <srvros/desk_popup.h>
@@ -191,7 +192,7 @@ static void menus(void) {
     desk_app_menus(&app.window,items,sizeof(items)/sizeof(*items));desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *canvas) {
-    const struct desk_theme *theme=&desk_theme_quiet;desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},theme->surface);
+    struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *theme=&resolved;desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},theme->surface);
     desk_ui_draw(canvas,&app.ui,theme);desk_label_draw(canvas,(struct desk_rect){12,58,56,24},&desk_font_16,"Target",theme->muted);
     desk_label_ellipsis(canvas,(struct desk_rect){12,canvas->height-26,canvas->width-24,22},&desk_font_16,app.status,theme->muted);
     desk_popup_draw(canvas,&app.context,theme);
@@ -216,7 +217,7 @@ int main(void) {
             struct desk_packet p;int result=desk_app_poll(&app.window,&p);if(result<=0) break;if(result==2) continue;
             if(p.type==DESK_CONFIGURE) { layout();desk_ui_focus(&app.ui,NET_TARGET); }
             else if(p.type==DESK_FOCUS) { desk_ui_window_focus(&app.ui,p.value!=0);desk_popup_cancel(&app.context);app.window.dirty=1; }
-            else if(p.type==DESK_PREFERENCES) { struct desk_preferences preferences;memcpy(&preferences,p.text,sizeof(preferences));app.body_size=preferences.text_size==20?20:16;layout(); }
+            else if(p.type==DESK_PREFERENCES) { struct desk_preferences preferences;memcpy(&preferences,p.text,sizeof(preferences));if(app.body_size!=(int)preferences.text_size) { app.body_size=preferences.text_size;layout(); } }
             else if(p.type==DESK_MENU_ACTION) action((struct desk_action){p.value,DESK_WIDGET_ACTIVATED});
             else if(p.type==DESK_KEY) { struct srv_key_event k;memcpy(&k,p.text,sizeof(k));key(&k); }
             else if(p.type==DESK_CONTEXT) context(p.x,p.y,p.value!=0);

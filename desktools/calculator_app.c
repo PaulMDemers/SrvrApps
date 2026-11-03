@@ -118,7 +118,7 @@ int tool_calculator_key(struct tool *t,const struct srv_key_event *k) {
     return 0;
 }
 void tool_calculator_draw(struct tool *t,struct desk_canvas *c) {
-    const struct desk_theme *theme=&desk_theme_quiet;
+    struct desk_theme resolved=desk_app_theme(&t->window);const struct desk_theme *theme=&resolved;
     desk_label_draw(c,(struct desk_rect){16,18,c->width-232,28},theme->heading,c->width<400?"Calc":"Calculator",theme->text);
     char label[80];snprintf(label,sizeof(label),"%s%s",t->calc_valid?(t->calc_just_evaluated?"= ":"Last: "):"",t->calc_valid?t->calc_result:"Result");
     desk_label_draw(c,(struct desk_rect){16,104,c->width-(c->width>=440?232:128),28},theme->heading,label,t->calc_valid?theme->text:theme->muted);

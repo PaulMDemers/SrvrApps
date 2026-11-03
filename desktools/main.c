@@ -118,7 +118,7 @@ static void key(struct tool *t,const struct srv_key_event *k) {
 }
 static void draw(struct tool *t,struct desk_canvas *c) {
     if(t->info_mode) { tool_files_info_draw(t,c);return; }
-    const struct desk_theme *theme=&desk_theme_quiet;
+    struct desk_theme resolved=desk_app_theme(&t->window);const struct desk_theme *theme=&resolved;
     desk_fill(c,(struct desk_rect){0,0,c->width,c->height},theme->surface);
     if(t->role==DESK_APP_SETTINGS) tool_settings_draw(t,c);else if(t->role==DESK_APP_FILES) tool_files_draw(t,c);else desk_ui_draw(c,&t->ui,theme);
     if(t->search_open) desk_searchbar_draw(c,&t->search,theme);

@@ -191,10 +191,11 @@ static void dialog_tick(struct desk_window_owner *owner) {
     if(t->window.dirty)window->dirty=1;
     struct desk_canvas canvas;
     if(desk_app_canvas(window,&canvas)==1) {
-        desk_fill(&canvas,canvas.clip,desk_theme_quiet.surface);
-        if(t->picker_mode)desk_picker_draw(&canvas,&t->picker,&desk_theme_quiet);
-        else if(t->prompt_mode)desk_prompt_draw(&canvas,&t->prompt,&desk_theme_quiet);
-        else desk_dialog_draw(&canvas,&t->dialog,&desk_theme_quiet);
+        struct desk_theme resolved=desk_app_theme(window);
+        desk_fill(&canvas,canvas.clip,resolved.surface);
+        if(t->picker_mode)desk_picker_draw(&canvas,&t->picker,&resolved);
+        else if(t->prompt_mode)desk_prompt_draw(&canvas,&t->prompt,&resolved);
+        else desk_dialog_draw(&canvas,&t->dialog,&resolved);
         desk_app_present(window);
     }
 }

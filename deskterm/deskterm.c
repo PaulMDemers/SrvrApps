@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_paths.h>
 #include <srvros/desk_app.h>
 #include <srvros/desk_runtime.h>
@@ -242,7 +243,7 @@ static void pump(void) {
     }
 }
 static void draw(struct desk_canvas *c) {
-    const struct desk_theme *theme=&desk_theme_quiet;
+    struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *theme=&resolved;
     desk_fill(c,(struct desk_rect){0,0,c->width,c->height},theme->surface);
     desk_ui_draw(c,&app.toolbar,theme);desk_terminal_view_draw(c,&app.view,theme,!app.exited && !(app.blink&1));
     desk_label_draw(c,(struct desk_rect){12,c->height-28,c->width-24,24},theme->body,app.status,theme->muted);

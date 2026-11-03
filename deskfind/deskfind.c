@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_paths.h>
 #include <srvros/desk_app.h>
 #include <srvros/desk_ui.h>
@@ -209,7 +210,7 @@ static void menus(void) {
     desk_app_menus(&app.window,items,sizeof(items)/sizeof(*items));desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *canvas) {
-    const struct desk_theme *theme=&desk_theme_quiet;desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},theme->surface);desk_ui_draw(canvas,&app.ui,theme);
+    struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *theme=&resolved;desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},theme->surface);desk_ui_draw(canvas,&app.ui,theme);
     desk_label_draw(canvas,(struct desk_rect){12,16,48,24},&desk_font_16,"Name",theme->muted);desk_label_draw(canvas,(struct desk_rect){12,58,48,24},&desk_font_16,"In",theme->muted);
     desk_label_ellipsis(canvas,(struct desk_rect){12,canvas->height-26,canvas->width-24,22},&desk_font_16,app.status,theme->muted);desk_popup_draw(canvas,&app.context,theme);
 }

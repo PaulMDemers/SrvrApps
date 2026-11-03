@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_app.h>
 #include <srvros/desk_ui.h>
 #include <srvros/desk_dialog.h>
@@ -210,7 +211,7 @@ static void menus(void) {
     desk_app_menus(&app.window,items,sizeof(items)/sizeof(*items));desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *c) {
-    const struct desk_theme *t=&desk_theme_quiet;desk_fill(c,(struct desk_rect){0,0,c->width,c->height},t->surface);desk_ui_draw(c,&app.ui,t);
+    struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *t=&resolved;desk_fill(c,(struct desk_rect){0,0,c->width,c->height},t->surface);desk_ui_draw(c,&app.ui,t);
     int timer=timer_page();uint64_t value=timer?desk_countdown_value(&app.timer,app.now):desk_stopwatch_value(&app.watch,app.now);char display[16],description[96];
     if(timer && value%1000000) value+=1000000-value%1000000;
     desk_duration_format(display,sizeof(display),value,!timer);int text_width=desk_text_width(&desk_font_digits_32,display);

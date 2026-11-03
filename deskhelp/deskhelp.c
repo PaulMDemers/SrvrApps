@@ -1,3 +1,4 @@
+#include <srvros/desk_theme_preferences.h>
 #include "content.h"
 #include <srvros/desk_app.h>
 #include <srvros/desk_preferences.h>
@@ -173,11 +174,12 @@ static void menus(void) {
     desk_app_menus(&app.window,items,sizeof(items)/sizeof(*items));desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *c) {
-    desk_fill(c,(struct desk_rect){0,0,c->width,c->height},desk_theme_quiet.surface);desk_ui_draw(c,&app.ui,&desk_theme_quiet);
+    struct desk_theme resolved=desk_app_theme(&app.window);
+    desk_fill(c,(struct desk_rect){0,0,c->width,c->height},resolved.surface);desk_ui_draw(c,&app.ui,&resolved);
     const char *message=app.status;
     if(c->width<480 && !strncmp(message,"Topics:",7)) message="Ctrl-L: topics · Alt-Left: back";
-    desk_label_draw(c,(struct desk_rect){12,c->height-30,c->width-24,24},desk_theme_quiet.body,message,desk_theme_quiet.muted);
-    if(app.chooser) desk_palette_draw(c,&app.topics,&desk_theme_quiet);
+    desk_label_draw(c,(struct desk_rect){12,c->height-30,c->width-24,24},resolved.body,message,resolved.muted);
+    if(app.chooser) desk_palette_draw(c,&app.topics,&resolved);
 }
 static void initialize(void) {
     desk_ui_init(&app.ui);desk_document_init(&app.document);desk_palette_init(&app.topics);desk_clipboard_init(&app.clipboard,app.clipboard_data);

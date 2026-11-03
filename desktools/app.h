@@ -1,6 +1,7 @@
 #ifndef DESKTOOLS_APP_H
 #define DESKTOOLS_APP_H
 #include <srvros/desk_app.h>
+#include <srvros/desk_theme_preferences.h>
 #include <srvros/desk_ui.h>
 #include <srvros/desk_dialog.h>
 #include <srvros/desk_prompt.h>
@@ -16,6 +17,7 @@
 enum tool_action { TOOL_NEW=1,TOOL_OPEN,TOOL_SAVE,TOOL_PATH,TOOL_BODY,TOOL_UP,TOOL_REFRESH,TOOL_MKDIR,TOOL_LIST,TOOL_NAME,TOOL_PICK_LOCATION,TOOL_PICK_NAME,TOOL_RENAME,TOOL_DUPLICATE,TOOL_DELETE,TOOL_PROMPT,TOOL_BACK,TOOL_FORWARD,TOOL_HOME,TOOL_VOLUME,TOOL_ROOT,TOOL_FIND,TOOL_FIND_NEXT,TOOL_FIND_PREVIOUS,TOOL_FIND_QUERY,TOOL_FIND_CLOSE,TOOL_INFO,TOOL_COPY_PATH,TOOL_REPLACE,TOOL_REPLACEMENT };
 enum { SYSTEM_TABLE=40,SYSTEM_PAUSE,SYSTEM_REFRESH,SYSTEM_TABS,SYSTEM_NETWORK_TABLE,SYSTEM_PROCESSES,SYSTEM_NETWORK,SYSTEM_DIAGNOSTICS,SYSTEM_DEVICES,SYSTEM_DEVICE_TABLE,SYSTEM_SENSORS,SYSTEM_SENSOR_TABLE,SYSTEM_BATTERY_START,SYSTEM_BATTERY_STOP };
 enum { SETTINGS_POINTER_SPEED=100,SETTINGS_POINTER_ACCELERATION,SETTINGS_BRIGHTNESS,SETTINGS_DISABLE_WHILE_TYPING,SETTINGS_TAP_CLICK,SETTINGS_TWO_FINGER_TAP,SETTINGS_AUDIO_VOLUME,SETTINGS_AUDIO_SPEAKERS,SETTINGS_AUDIO_HEADPHONES,SETTINGS_AUDIO_TEST,SETTINGS_AUDIO_STOP };
+enum { SETTINGS_ACCENT_BLUE=400,SETTINGS_ACCENT_GRAPHITE,SETTINGS_ACCENT_TEAL,SETTINGS_GLASS_SOLID,SETTINGS_GLASS_SUBTLE,SETTINGS_GLASS_CLEAR };
 enum { CALC_EVALUATE=70,CALC_CLEAR,CALC_USE,CALC_COPY,CALC_HISTORY,CALC_KEY_FIRST=300 };
 #define CALC_HISTORY_LIMIT 16
 #define CALC_EXPRESSION_BYTES 256
@@ -43,7 +45,7 @@ struct tool {
     struct desk_chooser chooser;
     int picker_mode,dialog_separate,quit_application,close_canceled;
     struct desk_button buttons[32];
-    struct desk_check checks[13];
+    struct desk_check checks[19];
     struct desk_slider pointer_speed,brightness,audio_volume;
     struct srv_audio_status audio;
     uint64_t audio_serial,audio_at;
@@ -53,7 +55,9 @@ struct tool {
     uint64_t brightness_serial,brightness_at;
     struct desk_scrollbar settings_scroll;
     struct desk_preferences preferences;
-    unsigned preferences_status;
+    unsigned preferences_status,appearance_pending;
+    uint64_t appearance_at;
+    struct desk_preferences appearance_requested;
     int settings_capture;
     struct desk_edit path,body,name;
     struct desk_text_buffer path_text,body_text,name_text;

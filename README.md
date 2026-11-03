@@ -27,3 +27,9 @@ need a matched OS/UI/app revision set and combined tests.
 The initial import preserves application bytes from SrvrOS `74d38d59`; earlier
 application history remains in that repository under `userspace/desk*`. The
 extraction commit groups those files without changing executable names.
+
+
+Appearance comes from each window's authoritative preference snapshot. Resolve
+`desk_app_theme()` when drawing main windows and owned dialogs; preserve content
+colors and existing document-size layout. Do not relayout or cancel capture for
+an accent-only update. See SrvrOS `docs/desktop-theme.md` for the shared contract.
