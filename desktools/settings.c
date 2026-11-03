@@ -3,6 +3,11 @@
 #include <srvros/desk_log.h>
 #include <string.h>
 static struct desk_rect viewport(struct tool *t) { return (struct desk_rect){16,64,t->window.width-32,t->window.height-108}; }
+struct appearance_metrics { int preview_height,radio_y,chrome_height,selection_y,selection_height,button_y,button_height; };
+static struct appearance_metrics appearance_metrics(struct tool *t) {
+    if(viewport(t).h<160) return (struct appearance_metrics){52,92,15,19,9,31,16};
+    return (struct appearance_metrics){68,108,19,26,12,43,18};
+}
 static int visible(struct tool *t,int y,int h) {
     struct desk_rect r=viewport(t);return y>=r.y && y+h<=r.y+r.h;
 }
@@ -98,33 +103,44 @@ void tool_settings_brightness(struct tool *t,const struct desk_packet *p) {
 void tool_settings_init(struct tool *t) {
     t->audio_wanted_volume=-1;
     desk_slider_init(&t->audio_volume);desk_slider_range(&t->audio_volume,0,100,1);
-    desk_ui_add(&t->ui,SETTINGS_AUDIO_VOLUME,DESK_CONTROL_SLIDER,&t->audio_volume,NULL);
-    desk_ui_add(&t->ui,SETTINGS_AUDIO_SPEAKERS,DESK_CONTROL_CHECK,&t->checks[11],"Speakers");
-    desk_ui_add(&t->ui,SETTINGS_AUDIO_HEADPHONES,DESK_CONTROL_CHECK,&t->checks[12],"Headphones");
-    desk_ui_add(&t->ui,SETTINGS_AUDIO_TEST,DESK_CONTROL_BUTTON,&t->buttons[16],"Test sound");
-    desk_ui_add(&t->ui,SETTINGS_AUDIO_STOP,DESK_CONTROL_BUTTON,&t->buttons[17],"Stop");
     t->brightness_percent=-1;desk_slider_init(&t->brightness);desk_slider_range(&t->brightness,5,100,1);
-    desk_ui_add(&t->ui,SETTINGS_BRIGHTNESS,DESK_CONTROL_SLIDER,&t->brightness,NULL);
     t->preferences=desk_preferences_default();t->preferences_status=DESK_PREF_LOADING;offset_text(t);
+    for(unsigned i=0;i<3;i++) desk_ui_add(&t->ui,SETTINGS_STYLE_SILVER+i,DESK_CONTROL_CHECK,&t->checks[19+i],"");
     static const char *appearance[]={"Blue","Graphite","Teal","Solid","Subtle","Clear"};
     for(unsigned i=0;i<6;i++) desk_ui_add(&t->ui,SETTINGS_ACCENT_BLUE+i,DESK_CONTROL_CHECK,&t->checks[13+i],appearance[i]);
     static const char *labels[]={"Standard","Larger","24-hour clock","Show date","Blue","Sand","Slate"};
     for(unsigned i=0;i<7;i++) desk_ui_add(&t->ui,i+1,DESK_CONTROL_CHECK,&t->checks[i],labels[i]);
     desk_slider_init(&t->pointer_speed);desk_slider_range(&t->pointer_speed,1,5,1);
+    desk_ui_add(&t->ui,TOOL_NAME,DESK_CONTROL_EDIT,&t->name,NULL);
+    desk_ui_add(&t->ui,8,DESK_CONTROL_BUTTON,&t->buttons[0],"Apply");
+    desk_ui_add(&t->ui,9,DESK_CONTROL_BUTTON,&t->buttons[1],"UTC");
     desk_ui_add(&t->ui,SETTINGS_POINTER_SPEED,DESK_CONTROL_SLIDER,&t->pointer_speed,NULL);
     desk_ui_add(&t->ui,SETTINGS_POINTER_ACCELERATION,DESK_CONTROL_CHECK,&t->checks[7],"Accelerate fast swipes");
     desk_ui_add(&t->ui,SETTINGS_DISABLE_WHILE_TYPING,DESK_CONTROL_CHECK,&t->checks[8],"Disable while typing");
     desk_ui_add(&t->ui,SETTINGS_TAP_CLICK,DESK_CONTROL_CHECK,&t->checks[9],"Tap to click");
     desk_ui_add(&t->ui,SETTINGS_TWO_FINGER_TAP,DESK_CONTROL_CHECK,&t->checks[10],"Two-finger tap to right-click");
-    desk_ui_add(&t->ui,TOOL_NAME,DESK_CONTROL_EDIT,&t->name,NULL);
-    desk_ui_add(&t->ui,8,DESK_CONTROL_BUTTON,&t->buttons[0],"Apply");
-    desk_ui_add(&t->ui,9,DESK_CONTROL_BUTTON,&t->buttons[1],"UTC");
+    desk_ui_add(&t->ui,SETTINGS_BRIGHTNESS,DESK_CONTROL_SLIDER,&t->brightness,NULL);
+    desk_ui_add(&t->ui,SETTINGS_AUDIO_VOLUME,DESK_CONTROL_SLIDER,&t->audio_volume,NULL);
+    desk_ui_add(&t->ui,SETTINGS_AUDIO_SPEAKERS,DESK_CONTROL_CHECK,&t->checks[11],"Speakers");
+    desk_ui_add(&t->ui,SETTINGS_AUDIO_HEADPHONES,DESK_CONTROL_CHECK,&t->checks[12],"Headphones");
+    desk_ui_add(&t->ui,SETTINGS_AUDIO_TEST,DESK_CONTROL_BUTTON,&t->buttons[16],"Test sound");
+    desk_ui_add(&t->ui,SETTINGS_AUDIO_STOP,DESK_CONTROL_BUTTON,&t->buttons[17],"Stop");
     tool_status(t,"Loading saved preferences…");
 }
 void tool_settings_layout(struct tool *t) {
     struct desk_rect view=viewport(t);
-    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1514:1586,view.h);
-    int y=64-t->settings_scroll.offset,w=t->window.width;
+    desk_scrollbar_configure(&t->settings_scroll,(struct desk_rect){t->window.width-28,view.y,12,view.h},t->window.width>=372?1660:1732,view.h);
+    int top=64-t->settings_scroll.offset,w=t->window.width;
+    int column=(w-64)/3;struct appearance_metrics metrics=appearance_metrics(t);
+    for(int i=0;i<3;i++)
+        desk_check_configure(&t->checks[19+i],(struct desk_rect){24+i*column,top+metrics.radio_y,column,32},
+            visible(t,top+metrics.radio_y,32),t->preferences.theme_style==(unsigned)i,1);
+    for(int i=0;i<6;i++) {
+        int row=top+180+i*36+(i>=3?32:0);
+        desk_check_configure(&t->checks[13+i],(struct desk_rect){24,row,w-64,32},visible(t,row,32),
+            i<3?t->preferences.theme_accent==(unsigned)i:t->preferences.glass_level==(unsigned)(i-3),1);
+    }
+    int y=top+440;
     desk_check_configure(&t->checks[0],(struct desk_rect){24,y+52,112,32},visible(t,y+52,32),t->preferences.text_size==16,1);
     desk_check_configure(&t->checks[1],(struct desk_rect){148,y+52,96,32},visible(t,y+52,32),t->preferences.text_size==20,1);
     desk_check_configure(&t->checks[2],(struct desk_rect){24,y+172,w-64,30},visible(t,y+172,30),(t->preferences.clock_flags&DESK_CLOCK_24H)!=0,0);
@@ -138,12 +154,6 @@ void tool_settings_layout(struct tool *t) {
             visible(t,row,32),t->preferences.wallpaper==(unsigned)i,1);
     }
     int py=y+(w>=372?460:532);
-    int appearance=py+760;
-    for(int i=0;i<6;i++) {
-        int row=appearance+36+i*36+(i>=3?28:0);
-        desk_check_configure(&t->checks[13+i],(struct desk_rect){24,row,w-64,32},visible(t,row,32),
-            i<3?t->preferences.theme_accent==(unsigned)i:t->preferences.glass_level==(unsigned)(i-3),1);
-    }
     int sound=py+420,available=audio_available(t),controls=available && !(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY);
     desk_slider_configure(&t->audio_volume,(struct desk_rect){24,sound+76,w-72,32},controls && visible(t,sound+76,32));
     desk_check_configure(&t->checks[11],(struct desk_rect){24,sound+120,120,32},controls && visible(t,sound+120,32),t->audio.output==0,1);
@@ -162,7 +172,26 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     struct desk_theme resolved=desk_app_theme(&t->window);const struct desk_theme *theme=&resolved;struct desk_rect old=c->clip,view=viewport(t);
     desk_text(c,theme->heading,24,20,"Desktop settings",theme->text);
     desk_clip(c,desk_intersect(old,(struct desk_rect){view.x,view.y,view.w-16,view.h}));
-    int y=64-t->settings_scroll.offset;
+    int top=64-t->settings_scroll.offset;
+    desk_label_draw(c,(struct desk_rect){24,top+4,c->width-64,28},theme->body,"Appearance",theme->text);
+    int column=(t->window.width-64)/3;struct appearance_metrics metrics=appearance_metrics(t);
+    static const char *styles[]={"Silver","Aero","Aqua"};
+    for(int i=0;i<3;i++) {
+        desk_label_draw(c,(struct desk_rect){24+i*column+22,top+metrics.radio_y+(32-theme->body->line_height)/2,column-22,theme->body->line_height},theme->body,styles[i],theme->text);
+        struct desk_theme preview;
+        if(desk_theme_configure_style(&preview,(unsigned)i,t->preferences.theme_accent,t->preferences.glass_level,16)) continue;
+        int x=24+i*column;
+        struct desk_rect window={x+2,top+36,column-8,metrics.preview_height};
+        desk_theme_panel(c,window,&preview,0,0);
+        desk_theme_glass(c,(struct desk_rect){window.x+1,window.y+1,window.w-2,metrics.chrome_height},preview.chrome_top,preview.chrome_bottom,preview.glass_alpha,preview.corner_radius);
+        desk_theme_selection(c,(struct desk_rect){window.x+7,window.y+metrics.selection_y,window.w-14,metrics.selection_height},&preview);
+        struct desk_button sample={0};
+        desk_button_configure(&sample,(struct desk_rect){window.x+7,window.y+metrics.button_y,window.w-14,metrics.button_height},1);
+        desk_button_draw(c,&sample,"",&preview);
+    }
+    desk_label_draw(c,(struct desk_rect){24,top+148,c->width-64,28},theme->body,"Accent color",theme->text);
+    desk_label_draw(c,(struct desk_rect){24,top+292,c->width-64,28},theme->body,"Window glass",theme->text);
+    int y=top+440;
     desk_label_draw(c,(struct desk_rect){24,y+4,c->width-64,28},theme->body,"Document text size",theme->text);
     desk_label_draw(c,(struct desk_rect){24,y+98,c->width-64,32},t->body_size==20?theme->heading:theme->body,
         "The quick brown fox jumps over the lazy dog.",theme->text);
@@ -185,8 +214,6 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     desk_label_draw(c,(struct desk_rect){24,sound+40,c->width-64,28},theme->body,label,theme->text);
     desk_label_draw(c,(struct desk_rect){24,sound+212,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_PCM_BUSY)?"Stop playback to change sound settings.":"A short, quiet test tone",theme->muted);
     desk_label_draw(c,(struct desk_rect){24,sound+248,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_JACK_SENSE)?(t->audio.headphone_present?"Headphones connected.":"No headphones detected."):(t->audio.capabilities&SRV_AUDIO_CAP_HEADPHONES)?"Choose headphones after plugging them in.":audio_available(t)?"Speaker output only.":"Sound output is unavailable in this session.",theme->muted);
-    desk_label_draw(c,(struct desk_rect){24,py+760,c->width-64,28},theme->body,"Appearance · accent color",theme->text);
-    desk_label_draw(c,(struct desk_rect){24,py+904,c->width-64,28},theme->body,"Window glass",theme->text);
     desk_ui_draw(c,&t->ui,theme);c->clip=old;
     if(desk_scrollbar_limit(&t->settings_scroll)>0) desk_scrollbar_draw(c,&t->settings_scroll,theme);
 }
@@ -203,14 +230,16 @@ static void request(struct tool *t,const struct desk_preferences *value,unsigned
 void tool_settings_action(struct tool *t,struct desk_action a) {
     int activated=(a.flags&DESK_WIDGET_ACTIVATED)!=0;
     struct desk_preferences value=t->preferences;
-    if(activated && a.id>=SETTINGS_ACCENT_BLUE && a.id<=SETTINGS_GLASS_CLEAR) {
-        unsigned mask=a.id<=SETTINGS_ACCENT_TEAL?DESK_PREF_ACCENT:DESK_PREF_GLASS;
+    if(activated && a.id>=SETTINGS_ACCENT_BLUE && a.id<=SETTINGS_STYLE_AQUA) {
+        unsigned mask=a.id<=SETTINGS_ACCENT_TEAL?DESK_PREF_ACCENT:a.id<=SETTINGS_GLASS_CLEAR?DESK_PREF_GLASS:DESK_PREF_STYLE;
         value=t->preferences;
         if(mask==DESK_PREF_ACCENT) value.theme_accent=a.id-SETTINGS_ACCENT_BLUE;
-        else value.glass_level=a.id-SETTINGS_GLASS_SOLID;
+        else if(mask==DESK_PREF_GLASS) value.glass_level=a.id-SETTINGS_GLASS_SOLID;
+        else value.theme_style=a.id-SETTINGS_STYLE_SILVER;
         if(desk_app_preferences(&t->window,&value,mask)) tool_status(t,"Appearance request could not be sent.");
         else { t->appearance_requested=value;t->appearance_pending=mask;t->appearance_at=srv_ticks();tool_status(t,"Applying appearance…"); }
         for(int i=0;i<6;i++) t->checks[13+i].checked=i<3?t->preferences.theme_accent==(unsigned)i:t->preferences.glass_level==(unsigned)(i-3);
+        for(int i=0;i<3;i++) t->checks[19+i].checked=t->preferences.theme_style==(unsigned)i;
         t->window.dirty=1;
     } else if(a.id==SETTINGS_AUDIO_VOLUME && (a.flags&DESK_WIDGET_CHANGED) && audio_available(t)) {
         t->audio_wanted_volume=t->audio_volume.value;
@@ -255,7 +284,8 @@ void tool_settings_receive(struct tool *t,const struct desk_packet *packet) {
     int size_changed=value.text_size!=t->preferences.text_size;
     if(t->appearance_pending &&
        (!(t->appearance_pending&DESK_PREF_ACCENT) || value.theme_accent==t->appearance_requested.theme_accent) &&
-       (!(t->appearance_pending&DESK_PREF_GLASS) || value.glass_level==t->appearance_requested.glass_level)) t->appearance_pending=0;
+       (!(t->appearance_pending&DESK_PREF_GLASS) || value.glass_level==t->appearance_requested.glass_level) &&
+       (!(t->appearance_pending&DESK_PREF_STYLE) || value.theme_style==t->appearance_requested.theme_style)) t->appearance_pending=0;
     int offset_changed=value.utc_offset_minutes!=t->preferences.utc_offset_minutes;
     t->preferences=value;t->body_size=value.text_size;t->preferences_status=packet->value;
     if(offset_changed) offset_text(t);
@@ -274,6 +304,7 @@ void tool_settings_receive(struct tool *t,const struct desk_packet *packet) {
         t->checks[9].checked=value.tap_to_click;t->checks[10].checked=value.two_finger_tap;
         desk_slider_set(&t->pointer_speed,value.pointer_speed);
         for(int i=0;i<6;i++) t->checks[13+i].checked=i<3?value.theme_accent==(unsigned)i:value.glass_level==(unsigned)(i-3);
+        for(int i=0;i<3;i++) t->checks[19+i].checked=value.theme_style==(unsigned)i;
         t->window.dirty=1;
     }
     if(t->appearance_pending) tool_status(t,"Applying appearance…");
