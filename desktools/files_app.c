@@ -142,12 +142,13 @@ static int start_change(struct tool *t,unsigned operation,const char *destinatio
     }
     t->file_select_name[0]=0;
     if(destination) snprintf(t->file_select_name,sizeof(t->file_select_name),"%s",strrchr(destination,'/')+1);
-    close_change(t);tool_status(t,operation==DESK_FILE_DELETE?"Deleting selected item…":operation==DESK_FILE_COPY?"Duplicating file…":"Renaming selected item…");
+    close_change(t);tool_status(t,t->transfer_action==TOOL_COPY_TO?"Copying file…":t->transfer_action==TOOL_MOVE_TO?"Moving file…":operation==DESK_FILE_DELETE?"Deleting selected item…":operation==DESK_FILE_COPY?"Duplicating file…":"Renaming selected item…");
     tool_layout(t);return 0;
 }
 static void open_change(struct tool *t,unsigned action) {
     int index=t->table.body.selected;if(index<0 || index>=t->file_count) { tool_status(t,"Select a file or folder first.");return; }
     t->file_selected=t->entries[index];
+    t->transfer_action=0;t->transfer_folder[0]=0;
     if(child_path(t,t->file_selected.name,t->file_source)) { tool_status(t,"This path is too long.");return; }
     if(action==TOOL_DELETE) {
         char message[384];snprintf(message,sizeof(message),"Permanently delete “%s”? There is no Trash or undo yet. Folders must be empty.",t->file_selected.name);
@@ -156,8 +157,16 @@ static void open_change(struct tool *t,unsigned action) {
         t->modal=3;desk_ui_window_focus(&t->ui,0);tool_layout(t);desk_dialog_focus(&t->dialog,t->window.focused);
         desk_log("desktools: files-delete-confirm name=%s\n",t->file_selected.name);return;
     }
-    if(action==TOOL_DUPLICATE && (t->file_selected.directory || t->file_selected.size>DESK_FILE_COPY_BYTES)) {
-        tool_status(t,"Duplicate currently supports individual files up to 16 MiB.");return;
+    if((action==TOOL_DUPLICATE || action==TOOL_COPY_TO || action==TOOL_MOVE_TO) && (t->file_selected.directory || t->file_selected.size>DESK_FILE_COPY_BYTES)) {
+        tool_status(t,"This action supports individual files up to 16 MiB.");return;
+    }
+    if(action==TOOL_COPY_TO || action==TOOL_MOVE_TO) {
+        if(desk_prompt_open(&t->prompt,action==TOOL_COPY_TO?"Copy to folder":"Move to folder",
+            "Enter an absolute destination folder. The original file name will be retained.",
+            t->saved_path,action==TOOL_COPY_TO?"Copy":"Move")) return;
+        t->prompt_mode=action;t->transfer_action=action;
+        desk_ui_window_focus(&t->ui,0);tool_layout(t);desk_prompt_focus(&t->prompt,t->window.focused);
+        desk_log("desktools: files-transfer-prompt action=%s source=%s\n",action==TOOL_COPY_TO?"copy":"move",t->file_source);return;
     }
     char name[128];snprintf(name,sizeof(name),"%s",t->file_selected.name);
     if(action==TOOL_DUPLICATE) {
@@ -176,9 +185,21 @@ void tool_files_prompt(struct tool *t,struct desk_action a) {
     if(a.flags&DESK_WIDGET_REDRAW) t->window.dirty=1;
     if(a.id==DESK_PROMPT_FIELD) tool_clipboard_action(t,(struct desk_action){TOOL_PROMPT,a.flags});
     if(!(a.flags&DESK_WIDGET_ACTIVATED)) return;
-    if(a.id==DESK_PROMPT_CANCEL) { close_change(t);tool_status(t,"File action canceled.");return; }
+    if(a.id==DESK_PROMPT_CANCEL) { t->transfer_action=0;t->transfer_folder[0]=0;close_change(t);tool_status(t,"File action canceled.");return; }
     if(a.id!=DESK_PROMPT_ACCEPT || !t->prompt_mode) return;
     char path[DESK_FILE_PATH];
+    if(t->prompt_mode==TOOL_COPY_TO || t->prompt_mode==TOOL_MOVE_TO) {
+        char folder[DESK_FILE_PATH];
+        if(normalize_path(t->prompt.text.data,folder) ||
+           desk_path_join(path,sizeof(path),folder,t->file_selected.name)) {
+            tool_status(t,"Enter a valid absolute destination folder path.");return;
+        }
+        if(!strcmp(path,t->file_source)) {tool_status(t,"Choose a different destination folder.");return;}
+        strcpy(t->transfer_folder,folder);
+        if(start_change(t,t->transfer_action==TOOL_COPY_TO?DESK_FILE_COPY:DESK_FILE_RENAME,path))
+            t->transfer_folder[0]=0;
+        return;
+    }
     if(!basename_valid(t->prompt.text.data) || child_path(t,t->prompt.text.data,path)) {
         tool_status(t,"Use a name under 96 ASCII characters, without slashes or reserved punctuation.");return;
     }
@@ -239,7 +260,7 @@ void tool_files_action(struct tool *t,struct desk_action a) {
     if(a.id==TOOL_HOME || a.id==TOOL_VOLUME || a.id==TOOL_ROOT) {
         list_directory(t,a.id==TOOL_HOME?desk_home():a.id==TOOL_VOLUME?"/fat":"/");return;
     }
-    if(a.id==TOOL_RENAME || a.id==TOOL_DUPLICATE || a.id==TOOL_DELETE) { open_change(t,a.id);return; }
+    if(a.id==TOOL_RENAME || a.id==TOOL_DUPLICATE || a.id==TOOL_DELETE || a.id==TOOL_COPY_TO || a.id==TOOL_MOVE_TO) { open_change(t,a.id);return; }
     if(a.id==TOOL_UP) {
         char path[DESK_FILE_PATH];
         if(!desk_path_parent(path,sizeof(path),t->saved_path[0]?t->saved_path:"/")) list_directory(t,path);
@@ -269,7 +290,7 @@ static void file_request_failed(struct tool *t,const char *message) {
         snprintf(status,sizeof(status),"%s, but the folder refresh failed. %s",t->file_notice,message);
         message=status;
     }
-    t->file_select_name[0]=t->file_notice[0]=0;t->location_pending=-1;
+    t->file_select_name[0]=t->file_notice[0]=0;t->transfer_action=0;t->transfer_folder[0]=0;t->location_pending=-1;
     tool_status(t,message);
     if(t->saved_path[0]) desk_text_buffer_set(&t->path_text,t->saved_path,strlen(t->saved_path));
     tool_layout(t);
@@ -279,18 +300,20 @@ void tool_files_finish(struct tool *t,int result) {
     if(t->job.request.operation==DESK_FILE_STAT) { tool_files_info_finish(t,result);return; }
     if(result<0 || t->job.response.status) {
         const char *message="Could not open or change this folder. Check the path and volume.";
-        if(result<0) message="The file worker stopped. Close and reopen Files to retry.";
+        if(result<0) message=t->transfer_action?"The worker stopped; the transfer outcome is unknown. Check both folders before retrying.":"The file worker stopped. Close and reopen Files to retry.";
         else if(t->job.response.status==DESK_FILE_CHANGED) message="The selected item changed. Refresh the folder before trying again.";
-        else if(t->job.response.status==DESK_FILE_EXISTS) message="That name already exists. Choose a different name.";
+        else if(t->job.response.status==DESK_FILE_EXISTS) message=t->transfer_action?"The destination already contains that name. Choose another folder.":"That name already exists. Choose a different name.";
         else if(t->job.response.status==DESK_FILE_BUSY) message="The item is open in another process. Close it and try again.";
-        else if(t->job.response.status==DESK_FILE_TOO_LARGE) message="Duplicate supports individual files up to 16 MiB.";
+        else if(t->job.response.status==DESK_FILE_TOO_LARGE) message="This action supports individual files up to 16 MiB.";
+        else if(t->transfer_action) message="The transfer outcome is unknown. Check both folders before retrying.";
         else if(t->job.request.operation>=DESK_FILE_RENAME) message="The change could not be verified. Refresh before retrying. Folders must be empty and the volume writable.";
         file_request_failed(t,message);return;
     }
     if(t->job.request.operation==DESK_FILE_MKDIR || t->job.request.operation>=DESK_FILE_RENAME) {
-        snprintf(t->file_notice,sizeof(t->file_notice),"%s",t->job.request.operation==DESK_FILE_DELETE?"Item deleted":
+        snprintf(t->file_notice,sizeof(t->file_notice),"%s",t->transfer_action==TOOL_COPY_TO?"File copied":t->transfer_action==TOOL_MOVE_TO?"File moved":t->job.request.operation==DESK_FILE_DELETE?"Item deleted":
             t->job.request.operation==DESK_FILE_RENAME?"Item renamed":t->job.request.operation==DESK_FILE_COPY?"Copy verified":"Folder created");
-        if(list_directory(t,t->saved_path)) file_request_failed(t,"Refresh the folder before trying another change.");
+        if(list_directory(t,t->transfer_action?t->transfer_folder:t->saved_path)) file_request_failed(t,"Refresh the folder before trying another change.");
+        else {t->transfer_action=0;t->transfer_folder[0]=0;}
         return;
     }
     int count=tool_listing_decode(t);
