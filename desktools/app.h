@@ -14,7 +14,7 @@
 #include <srvros/desk_preferences.h>
 #include <srvros/sys.h>
 #include <srvros/audio_abi.h>
-enum tool_action { TOOL_NEW=1,TOOL_OPEN,TOOL_SAVE,TOOL_PATH,TOOL_BODY,TOOL_UP,TOOL_REFRESH,TOOL_MKDIR,TOOL_LIST,TOOL_NAME,TOOL_PICK_LOCATION,TOOL_PICK_NAME,TOOL_RENAME,TOOL_DUPLICATE,TOOL_DELETE,TOOL_PROMPT,TOOL_BACK,TOOL_FORWARD,TOOL_HOME,TOOL_VOLUME,TOOL_ROOT,TOOL_FIND,TOOL_FIND_NEXT,TOOL_FIND_PREVIOUS,TOOL_FIND_QUERY,TOOL_FIND_CLOSE,TOOL_INFO,TOOL_COPY_PATH,TOOL_REPLACE,TOOL_REPLACEMENT,TOOL_OPEN_WITH };
+enum tool_action { TOOL_NEW=1,TOOL_OPEN,TOOL_SAVE,TOOL_PATH,TOOL_BODY,TOOL_UP,TOOL_REFRESH,TOOL_MKDIR,TOOL_LIST,TOOL_NAME,TOOL_PICK_LOCATION,TOOL_PICK_NAME,TOOL_RENAME,TOOL_DUPLICATE,TOOL_DELETE,TOOL_PROMPT,TOOL_BACK,TOOL_FORWARD,TOOL_HOME,TOOL_VOLUME,TOOL_ROOT,TOOL_FIND,TOOL_FIND_NEXT,TOOL_FIND_PREVIOUS,TOOL_FIND_QUERY,TOOL_FIND_CLOSE,TOOL_INFO,TOOL_COPY_PATH,TOOL_REPLACE,TOOL_REPLACEMENT,TOOL_OPEN_WITH,TOOL_COPY_TO,TOOL_MOVE_TO };
 #define TOOL_OPEN_WITH_CHOICE_BASE 1100u
 enum { SYSTEM_TABLE=40,SYSTEM_PAUSE,SYSTEM_REFRESH,SYSTEM_TABS,SYSTEM_NETWORK_TABLE,SYSTEM_PROCESSES,SYSTEM_NETWORK,SYSTEM_DIAGNOSTICS,SYSTEM_DEVICES,SYSTEM_DEVICE_TABLE,SYSTEM_SENSORS,SYSTEM_SENSOR_TABLE,SYSTEM_BATTERY_START,SYSTEM_BATTERY_STOP,SYSTEM_WIFI,SYSTEM_WIFI_TABLE,SYSTEM_WIFI_SELECT,SYSTEM_WIFI_ADAPTER };
 enum { SETTINGS_POINTER_SPEED=100,SETTINGS_POINTER_ACCELERATION,SETTINGS_BRIGHTNESS,SETTINGS_DISABLE_WHILE_TYPING,SETTINGS_TAP_CLICK,SETTINGS_TWO_FINGER_TAP,SETTINGS_AUDIO_VOLUME,SETTINGS_AUDIO_SPEAKERS,SETTINGS_AUDIO_HEADPHONES,SETTINGS_AUDIO_TEST,SETTINGS_AUDIO_STOP };
@@ -40,11 +40,15 @@ struct tool {
     struct desk_prompt prompt;
     struct desk_searchbar search;
     int search_open,search_focus;
-    int prompt_mode;
+    int prompt_mode,transfer_action;
+    char transfer_folder[DESK_FILE_PATH];
     struct desk_file_entry file_selected;
     char file_source[DESK_FILE_PATH],file_select_name[96],file_notice[80];
     struct desk_file_picker picker;
     struct desk_chooser chooser;
+    struct desk_file_entry chooser_entries[DESK_FILE_ENTRIES];
+    struct desk_list_item chooser_items[DESK_FILE_ENTRIES];
+    char chooser_details[DESK_FILE_ENTRIES][32];
     int picker_mode,dialog_separate,quit_application,close_canceled;
     struct desk_button buttons[32];
     struct desk_check checks[22];
@@ -153,9 +157,11 @@ void tool_clipboard_action(struct tool *tool,struct desk_action action);
 void tool_clipboard_result(struct tool *tool,int result);
 int tool_listing_decode(struct tool *tool);
 void tool_picker_open(struct tool *tool,int mode);
+void tool_files_transfer_accept(struct tool *tool,const char *folder);
 void tool_picker_result(struct tool *tool,struct desk_picker_result action);
 void tool_picker_finish(struct tool *tool,int result);
 void tool_picker_cancel(struct tool *tool);
+void tool_picker_dismiss(struct tool *tool);
 void tool_text_open_path(struct tool *tool,const char *path);
 void tool_text_save(struct tool *tool,int choose_path);
 void tool_text_save_path(struct tool *tool,const char *path);

@@ -22,8 +22,10 @@ static unsigned files_commands(const struct tool *t,struct desk_command commands
         {MENU_NEW_WINDOW,blocked|(!t->window.connection?DESK_MENU_DISABLED:0),0x11,SRV_KEY_CTRL|SRV_KEY_SHIFT,"New window","Ctrl-Shift-N"},
         {MENU_CLOSE,blocked,0x1a,SRV_KEY_CTRL,"Close window","Ctrl-W"},
         {MENU_QUIT,0,0x14,SRV_KEY_CTRL,"Quit Files","Ctrl-Q"},
-        {TOOL_OPEN_WITH,tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED,0x12,SRV_KEY_CTRL|SRV_KEY_SHIFT,"Open With…","Ctrl-Shift-O"}};
-    memcpy(commands,values,sizeof(values));return 4;
+        {TOOL_OPEN_WITH,tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED,0x12,SRV_KEY_CTRL|SRV_KEY_SHIFT,"Open With…","Ctrl-Shift-O"},
+        {TOOL_COPY_TO,tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED,0x06,SRV_KEY_CTRL|SRV_KEY_SHIFT,"Copy to…","Ctrl-Shift-C"},
+        {TOOL_MOVE_TO,tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED,0x10,SRV_KEY_CTRL|SRV_KEY_SHIFT,"Move to…","Ctrl-Shift-M"}};
+    memcpy(commands,values,sizeof(values));return 6;
 }
 static unsigned standard_commands(const struct tool *t,struct desk_command commands[7]) {
     return t->role==DESK_APP_TEXT?text_commands(t,commands):files_commands(t,commands);
@@ -38,7 +40,7 @@ static void text_command(void *context,unsigned id) {
         if(t->role==DESK_APP_FILES)tool_runtime_close_request(t);else tool_text_request(t,TOOL_PENDING_CLOSE);
     }
     else if(id==MENU_NEW_WINDOW)tool_new_window(t);
-    else if(id==TOOL_OPEN_WITH && t->role==DESK_APP_FILES)tool_files_action(t,(struct desk_action){id,DESK_WIDGET_ACTIVATED});
+    else if((id==TOOL_OPEN_WITH || id==TOOL_COPY_TO || id==TOOL_MOVE_TO) && t->role==DESK_APP_FILES)tool_files_action(t,(struct desk_action){id,DESK_WIDGET_ACTIVATED});
     else if(id==MENU_SAVE_AS)tool_text_save(t,1);
     else tool_text_action(t,(struct desk_action){id,DESK_WIDGET_ACTIVATED});
 }
@@ -87,6 +89,7 @@ void tool_menu_refresh(struct tool *t) {
             append(items,&count,TOOL_OPEN,"Open selected item","Enter",busy|(t->table.body.selected<0?DESK_MENU_DISABLED:0));
             struct desk_command open_commands[7];files_commands(t,open_commands);
             desk_command_menu(&open_commands[3],&items[count++]);
+            desk_command_menu(&open_commands[4],&items[count++]);desk_command_menu(&open_commands[5],&items[count++]);
             append(items,&count,MENU_NEW_FOLDER,"New folder…",NULL,busy);
             unsigned selected=busy|(t->table.body.selected<0?DESK_MENU_DISABLED:0);
             append(items,&count,TOOL_INFO,"Information…","Ctrl-I",selected);
@@ -110,11 +113,11 @@ void tool_menu_refresh(struct tool *t) {
         append(items,&count,0,"Edit",NULL,DESK_MENU_HEADING);
         append(items,&count,MENU_EDIT+DESK_EDIT_UNDO,"Undo","Ctrl-Z",disabled|(!desk_text_buffer_can_undo(text,0)?DESK_MENU_DISABLED:0));
         append(items,&count,MENU_EDIT+DESK_EDIT_REDO,"Redo","Ctrl-Shift-Z",disabled|(!desk_text_buffer_can_undo(text,1)?DESK_MENU_DISABLED:0));
-        append(items,&count,0,"",NULL,DESK_MENU_SEPARATOR);
+        if(t->role!=DESK_APP_FILES) append(items,&count,0,"",NULL,DESK_MENU_SEPARATOR);
         append(items,&count,MENU_EDIT+DESK_EDIT_COMMAND_CUT,"Cut","Ctrl-X",selection|(t->clip.mode?DESK_MENU_DISABLED:0));
         append(items,&count,MENU_EDIT+DESK_EDIT_COMMAND_COPY,"Copy","Ctrl-C",selection|(t->clip.mode?DESK_MENU_DISABLED:0));
         append(items,&count,MENU_EDIT+DESK_EDIT_COMMAND_PASTE,"Paste","Ctrl-V",disabled|(t->clip.mode?DESK_MENU_DISABLED:0));
-        append(items,&count,0,"",NULL,DESK_MENU_SEPARATOR);
+        if(t->role!=DESK_APP_FILES) append(items,&count,0,"",NULL,DESK_MENU_SEPARATOR);
         append(items,&count,MENU_EDIT+DESK_EDIT_SELECT_ALL,"Select all","Ctrl-A",disabled);
     }
     if(t->role==DESK_APP_TEXT) {
@@ -221,6 +224,8 @@ void tool_context_open(struct tool *t,int x,int y,int keyboard) {
         unsigned disabled=selected?0:DESK_MENU_DISABLED;
         append(items,&count,TOOL_OPEN,"Open","Enter",disabled);
         append(items,&count,TOOL_OPEN_WITH,"Open With…","Ctrl-Shift-O",tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED);
+        append(items,&count,TOOL_COPY_TO,"Copy to…","Ctrl-Shift-C",tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED);
+        append(items,&count,TOOL_MOVE_TO,"Move to…","Ctrl-Shift-M",tool_files_open_with_enabled(t)?0:DESK_MENU_DISABLED);
         append(items,&count,TOOL_INFO,"Information…","Ctrl-I",disabled);
         append(items,&count,TOOL_COPY_PATH,"Copy path",NULL,disabled|(t->clip.mode?DESK_MENU_DISABLED:0));
         append(items,&count,TOOL_RENAME,"Rename…","F2",disabled);

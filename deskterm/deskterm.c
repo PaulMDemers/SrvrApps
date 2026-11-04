@@ -29,14 +29,15 @@ struct terminal_app {
     char clipboard_store[DESK_CLIPBOARD_BYTES+1],copy[DESK_CLIPBOARD_BYTES+1];
     uint8_t input[INPUT_BYTES];unsigned input_head,input_size;
     uint64_t child,exit_status,blink;
-    int master,started,exited,quit,modal,clip_paste,pty_eof;
+    int master,started,exited,quit,modal,closing,clip_paste,pty_eof;
+    long wait_error;
     char status[160];
 };
 static struct terminal_app app;
 enum { TERM_CLOSE=10,TERM_SELECT_ALL,TERM_PAGE_UP,TERM_PAGE_DOWN,TERM_FOLLOW };
 static int network_trial;
 static unsigned terminal_commands(struct desk_command commands[9]) {
-    unsigned modal=app.modal?DESK_MENU_DISABLED:0;
+    unsigned modal=(app.modal || app.closing)?DESK_MENU_DISABLED:0;
     unsigned stopped=modal|(app.exited || !app.child?DESK_MENU_DISABLED:0);
     const struct desk_command values[]={
         {1,modal,0x11,SRV_KEY_CTRL|SRV_KEY_SHIFT,"New terminal","Ctrl-Shift-N"},
@@ -121,6 +122,7 @@ failed:
     srv_close(pair[1]);srv_close(app.master);app.master=-1;status("The shell could not be started.");
 }
 static void close_request(void) {
+    if(app.closing || app.modal) return;
     if(!app.child || app.exited) { app.quit=1;return; }
     app.modal=1;desk_terminal_view_event(&app.view,(struct desk_widget_event){.type=DESK_WIDGET_FOCUS_OUT});
     desk_ui_window_focus(&app.toolbar,0);
@@ -132,7 +134,21 @@ static void close_request(void) {
 static void dialog_action(struct desk_action a) {
     if(a.flags&DESK_WIDGET_REDRAW) app.window.dirty=1;
     if(!(a.flags&DESK_WIDGET_ACTIVATED)) return;
-    if(a.id==1) app.quit=1;
+    if(a.id==1) {
+        desk_log("deskterm: close accepted shell=%llu\n",(unsigned long long)app.child);
+        if(app.exited) {app.quit=1;return;}
+        app.modal=0;app.closing=1;app.input_size=0;
+        desk_dialog_focus(&app.dialog,0);
+        int master=app.master;app.master=-1;app.pty_eof=1;
+        long result=master>=0?srv_close(master):-1;
+        if(result<0) {
+            status("Could not confirm terminal hangup; waiting for the shell to exit.");
+            desk_log("deskterm: hangup close failed result=%ld\n",result);
+        } else {
+            status("Hangup sent; waiting for the shell to exit…");
+            desk_log("deskterm: hangup sent shell=%llu\n",(unsigned long long)app.child);
+        }
+    }
     else if(a.id==2) {
         app.modal=0;desk_app_cancel_close(&app.window);desk_dialog_focus(&app.dialog,0);desk_ui_window_focus(&app.toolbar,1);
         desk_terminal_view_event(&app.view,(struct desk_widget_event){.type=DESK_WIDGET_FOCUS_IN});app.window.dirty=1;
@@ -153,6 +169,7 @@ static void paste(void) {
     if(desk_clipboard_paste(&app.clipboard,app.window.server,srv_ticks())) status("Paste could not be started.");
 }
 static void clipboard_result(int result) {
+    if(app.closing) return;
     if(result<0) { status("The clipboard transfer failed. Try again.");return; }
     if(app.clip_paste && app.modal) { status("Paste was canceled while the close dialog was open.");return; }
     if(!app.clip_paste) { status("Selection copied.");desk_log("deskterm: clipboard copied\n");return; }
@@ -197,6 +214,7 @@ static void toolbar_action(struct desk_action action) {
 }
 static void keyboard(const struct srv_key_event *key) {
     if(app.modal) {dialog_action(desk_dialog_key(&app.dialog,key));return;}
+    if(app.closing) return;
     if(!(key->flags&SRV_KEY_DOWN_EVENT) || (key->flags&SRV_KEY_CANCEL))return;
     unsigned id=terminal_shortcut(key);
     if(id) {if(!(key->flags&SRV_KEY_REPEAT))run_command(id);return;}
@@ -223,7 +241,7 @@ static void menus(void) {
 }
 static void menu_action(unsigned id) {run_command(id);}
 static void pump(void) {
-    if(app.master<0) return;
+    if(app.master<0) goto wait_child;
     for(unsigned batch=0;batch<4 && app.input_size;batch++) {
         unsigned size=INPUT_BYTES-app.input_head;if(size>app.input_size) size=app.input_size;if(size>4096) size=4096;
         long n=srv_write(app.master,app.input+app.input_head,size);
@@ -241,11 +259,20 @@ static void pump(void) {
         char replies[DESK_TERM_REPLY];size_t size=desk_terminal_reply(&app.screen,replies,sizeof(replies));enqueue(replies,size);
     }
     if(desk_terminal_view_sync(&app.view)) app.window.dirty=1;
+wait_child:
     if(app.child && !app.exited) {
         long result=srv_wait(app.child,&app.exit_status,SRV_WAIT_NOHANG);
         if(result==(long)app.child) {
             app.exited=1;app.input_size=0;char text[160];snprintf(text,sizeof(text),"Session ended · status %llu · New opens another terminal",(unsigned long long)app.exit_status);status(text);
             desk_app_title(&app.window,"Terminal — Session ended");desk_log("deskterm: shell exited status=%llu\n",(unsigned long long)app.exit_status);
+            if(app.closing) {
+                desk_log("deskterm: shell retired shell=%llu status=%llu\n",(unsigned long long)app.child,(unsigned long long)app.exit_status);
+                app.quit=1;
+            }
+        } else if(app.closing && result!=0 && result!=SRV_ERR_INTR && result!=app.wait_error) {
+            app.wait_error=result;
+            status("Could not confirm shell exit; still waiting.");
+            desk_log("deskterm: shell wait failed result=%ld shell=%llu\n",result,(unsigned long long)app.child);
         }
     }
 }
@@ -293,7 +320,7 @@ int main(int argc,char **argv) {
         if(desk_clipboard_tick(&app.clipboard,srv_ticks())<0) clipboard_result(-1);
         if(desk_runtime_dispatch(&app.runtime,terminal_event,NULL)<0)app.window.failed=1;
         if(app.quit || app.window.closed || app.window.failed) break;
-        pump();uint64_t ticks=(uint64_t)srv_ticks(),blink=ticks/50;
+        pump();if(app.quit) break;uint64_t ticks=(uint64_t)srv_ticks(),blink=ticks/50;
         if(blink!=app.blink) { app.blink=blink;if(app.view.focused && !app.modal) app.window.dirty=1; }
         menus();
         struct desk_canvas canvas;if(desk_app_canvas(&app.window,&canvas)==1) { draw(&canvas);desk_app_present(&app.window); }
@@ -302,13 +329,18 @@ int main(int argc,char **argv) {
             if(events)desk_runtime_watch(&app.runtime,app.master,events);
         }
         long now=srv_monotonic_us();
+        if(now>=0 && app.closing)desk_runtime_deadline(&app.runtime,(uint64_t)now+100000);
         if(now>=0 && app.view.focused && !app.modal)desk_runtime_deadline(&app.runtime,(uint64_t)now+(50-ticks%50)*10000);
-        desk_runtime_idle(&app.runtime,app.clipboard.mode || app.screen.reply_size || !app.started);
+        desk_runtime_idle(&app.runtime,app.clipboard.mode || (!app.closing && app.screen.reply_size) || !app.started);
     }
     desk_runtime_timers_clear(&app.runtime);
     if(app.master>=0) srv_close(app.master);
     if(app.child && !app.exited) for(unsigned i=0;i<100;i++) {
-        long result=srv_wait(app.child,&app.exit_status,SRV_WAIT_NOHANG);if(result!=0) break;srv_sleep_ticks(1);
+        long result=srv_wait(app.child,&app.exit_status,SRV_WAIT_NOHANG);
+        if(result==(long)app.child) {app.exited=1;break;}
+        if(result<0 && result!=SRV_ERR_INTR) break;
+        srv_sleep_ticks(1);
     }
+    if(app.child && !app.exited)desk_log("deskterm: exit without confirmed shell retirement shell=%llu\n",(unsigned long long)app.child);
     desk_app_close(&app.window);desk_log("deskterm: exited failure=%d\n",app.window.failed);return app.window.failed?1:0;
 }
