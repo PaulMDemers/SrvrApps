@@ -28,6 +28,8 @@ static void file_rows(struct tool *t) {
         while(j>0 && file_compare(&t->entries[j-1],&value,t->table.sort_column,t->table.descending)>0) { t->entries[j]=t->entries[j-1];j--; }
         t->entries[j]=value;
     }
+    uint64_t ids[DESK_FILE_ENTRIES];
+    if(desk_listing_row_ids(t->entries,t->file_count,ids)) return;
     for(int i=0;i<t->file_count;i++) {
         struct desk_file_entry *e=&t->entries[i];
         if(e->directory) strcpy(t->details[i],"—");
@@ -38,7 +40,7 @@ static void file_rows(struct tool *t) {
         if(stamp>0 && stamp<=253402300799LL && gmtime_r(&stamp,&utc) && utc.tm_year>=70 && utc.tm_year<=8099)
             { if(!strftime(t->file_dates[i],24,"%Y-%m-%d %H:%M",&utc)) strcpy(t->file_dates[i],"—"); }
         else strcpy(t->file_dates[i],"—");
-        t->table_rows[i]=(struct desk_table_row){.id=e->inode,.cells={e->name,e->directory?"Folder":"File",t->details[i],t->file_dates[i]}};
+        t->table_rows[i]=(struct desk_table_row){.id=ids[i],.cells={e->name,e->directory?"Folder":"File",t->details[i],t->file_dates[i]}};
     }
     desk_table_rows(&t->table,t->table_rows,t->file_count);t->window.dirty=1;
 }
@@ -51,7 +53,7 @@ static void remember_selection(struct tool *t) {
     if(t->location_index<0 || t->location_index>=t->location_count) return;
     struct tool_location *location=&t->locations[t->location_index];
     int selected=t->table.body.selected;
-    location->selected=selected>=0 && selected<t->file_count?t->entries[selected].inode:0;
+    location->selected=selected>=0 && selected<t->file_count?t->table_rows[selected].id:0;
     location->scroll=t->table.body.scroll.offset;
 }
 static int list_directory(struct tool *t,const char *path) {
@@ -326,7 +328,7 @@ void tool_files_finish(struct tool *t,int result) {
     strcpy(t->saved_path,t->job.request.path);t->title_dirty=1;desk_text_buffer_set(&t->path_text,t->saved_path,strlen(t->saved_path));
     t->file_count=count;file_rows(t);
     struct tool_location *location=&t->locations[t->location_index];
-    for(int i=0;i<count;i++) if(t->entries[i].inode==location->selected) desk_list_select(&t->table.body,i);
+    for(int i=0;i<count;i++) if(t->table_rows[i].id==location->selected) desk_list_select(&t->table.body,i);
     desk_scrollbar_set(&t->table.body.scroll,location->scroll);
     desk_log("desktools: files-location path=%s history=%d/%d\n",t->saved_path,t->location_index+1,t->location_count);
     if(t->file_select_name[0]) {
