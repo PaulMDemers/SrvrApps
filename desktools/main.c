@@ -174,7 +174,16 @@ void tool_runtime_close_request(struct tool *t) {
     if(t->role==DESK_APP_TEXT) {
         if(t->picker_mode)tool_picker_cancel(t);
         t->close_canceled=0;tool_text_request(t,TOOL_PENDING_CLOSE);
-    } else {tool_runtime_cancel_modal(t);t->closing=1;}
+    } else {
+        /* A close request dismisses an unaccepted picker; it is not the user
+         * canceling the window close. Its in-flight browse still drains. */
+        if(t->picker_mode) {
+            tool_picker_dismiss(t);tool_layout(t);
+        }
+        tool_runtime_cancel_modal(t);t->closing=1;
+        if(t->job.busy)desk_log("window-lifecycle: close-wait role=%d window=%llu busy=1 operation=%u\n",
+            t->role,(unsigned long long)t->window.window,t->job.request.operation);
+    }
 }
 void tool_runtime_event(struct tool *t,struct desk_packet p) {
     if(p.type==DESK_CLIPBOARD_ACK || p.type==DESK_CLIPBOARD_DATA) {

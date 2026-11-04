@@ -30,10 +30,14 @@ void tool_picker_open(struct tool *t,int mode) {
     desk_picker_configure(&t->picker,(struct desk_rect){0,0,t->window.width,t->window.height});
     browse(t);desk_log("desktools: picker mode=%d opened\n",mode);
 }
+void tool_picker_dismiss(struct tool *t) {
+    t->picker_mode=0;desk_chooser_cancel(&t->chooser);
+    desk_ui_window_focus(&t->ui,t->window.focused);t->window.dirty=1;
+}
 void tool_picker_cancel(struct tool *t) {
     if(t->pending==TOOL_PENDING_CLOSE || t->closing)t->close_canceled=1;
-    t->picker_mode=0;t->pending=0;t->closing=0;desk_chooser_cancel(&t->chooser);
-    desk_app_cancel_close(&t->window);desk_ui_window_focus(&t->ui,t->window.focused);desk_ui_focus(&t->ui,TOOL_BODY);
+    t->pending=0;t->closing=0;tool_picker_dismiss(t);
+    desk_app_cancel_close(&t->window);desk_ui_focus(&t->ui,TOOL_BODY);
     tool_status(t,"File selection canceled. Your document was kept.");
 }
 void tool_picker_result(struct tool *t,struct desk_picker_result a) {
@@ -56,7 +60,7 @@ void tool_picker_finish(struct tool *t,int result) {
     int outcome=desk_chooser_finish(&t->chooser,t->chooser.pending_id,result);
     if(outcome==DESK_CHOOSER_STALE || t->chooser.pending)return;
     if(!t->picker_mode) {
-        if(t->closing) { t->closing=0;tool_text_request(t,TOOL_PENDING_CLOSE); }
+        if(t->closing && t->role!=DESK_APP_FILES) { t->closing=0;tool_text_request(t,TOOL_PENDING_CLOSE); }
         return;
     }
     if(outcome==DESK_CHOOSER_READY)

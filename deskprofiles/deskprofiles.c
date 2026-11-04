@@ -194,6 +194,9 @@ static void poll_child(void) {
         snprintf(a.report_text[3],sizeof(a.report_text[3]),"%s",was!=TRANSFERRING?"Go back to check the inputs and try review again.":creating()?"If creation was interrupted, restart and use the profile chooser recovery before trying again.":importing()?"If an import was interrupted, preserve the original bundle. Restart and use the existing profile chooser recovery before trying again.":"An incomplete bundle may remain at the destination. Keep it and choose a fresh filename before retrying.");
         struct desk_document_block b[]={{1,DESK_DOCUMENT_HEADING,a.report_text[0]},{2,DESK_DOCUMENT_PARAGRAPH,a.report_text[1]},{3,DESK_DOCUMENT_PARAGRAPH,a.report_text[2]},{4,DESK_DOCUMENT_NOTE,a.report_text[3]}};desk_document_set(&a.report,b,4);
         status("Read the details, then go back to your inputs.");trace("editing","error");if(a.diagnostic[0])desk_log("profile-ui: checkpoint=%s result=error\n",a.diagnostic);
+        if(a.close_pending && !a.window.failed && !a.window.closed) {
+            a.close_pending=0;desk_app_cancel_close(&a.window);trace("closing","canceled-error");
+        }
     } else if(was==PREVIEWING) { a.state=REVIEWING;status("Review all details, then confirm or go back.");trace("reviewing","ready"); }
     else { a.state=COMPLETE;report(creating()?"Profile created":"Transfer complete",creating()?"Select the new profile in the next startup chooser. Current apps keep their existing home.":importing()?"The profile is available in the next startup chooser. The current session has not changed.":"The profile bundle was created at the selected destination.");status(creating()?"Profile created.":"Transfer complete.");trace("complete","success"); }
     layout();if(a.close_pending)a.quit=1;
@@ -246,7 +249,7 @@ static void picker_action(struct desk_picker_result r) {
     else { snprintf(a.output,sizeof(a.output),"%s",selected.path);status("Destination selected. Existing files cannot be overwritten."); }
     desk_log("profile-ui: state=picker operation=%s result=selected kind=%d\n",operation(),kind);layout();
 }
-static void request_close(void) { if(a.worker_active||a.picker_starting) { a.close_pending=1;status("Finishing the operation before closing this window…");desk_app_cancel_close(&a.window);trace("closing","waiting"); }else a.quit=1; }
+static void request_close(void) { if(a.worker_active||a.picker_starting) { if(a.close_pending)return;a.close_pending=1;status("Finishing the operation before closing this window…");trace("closing","waiting"); }else a.quit=1; }
 static void action(struct desk_action x) {
     if(x.flags&DESK_WIDGET_REDRAW)a.window.dirty=1;
     if(a.close_pending||a.picker_starting)return;
