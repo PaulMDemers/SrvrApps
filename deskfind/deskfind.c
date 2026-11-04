@@ -13,14 +13,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
-enum { FIND_QUERY=1,FIND_ROOT,FIND_RUN,FIND_STOP,FIND_TABLE,FIND_OPEN,FIND_REVEAL,FIND_COPY,FIND_TABS,FIND_ALL=20,FIND_FILES,FIND_FOLDERS,FIND_CLOSE,FIND_EDIT=100 };
+enum { FIND_QUERY=1,FIND_ROOT,FIND_RUN,FIND_STOP,FIND_TABLE,FIND_OPEN,FIND_REVEAL,FIND_COPY,FIND_TABS,FIND_ALL=20,FIND_FILES,FIND_FOLDERS,FIND_CLOSE,FIND_NAME,FIND_CONTENTS,FIND_MODE,FIND_EDIT=100 };
 struct search_app {
     struct desk_app window;
     struct desk_ui ui;
     struct desk_edit query,root;
     struct desk_text_buffer query_text,root_text;
     char query_storage[2][DESK_SEARCH_QUERY],root_storage[2][DESK_SEARCH_PATH];
-    struct desk_tabs tabs;
+    struct desk_tabs tabs,mode_tabs;
     struct desk_button search,stop,open,reveal,copy;
     struct desk_table table;
     struct desk_popup context;
@@ -32,7 +32,7 @@ struct search_app {
     unsigned order[DESK_SEARCH_LIMIT];
     char folders[DESK_SEARCH_LIMIT][DESK_SEARCH_PATH],sizes[DESK_SEARCH_LIMIT][32];
     char run_root[DESK_SEARCH_PATH],run_query[DESK_SEARCH_QUERY],status[256];
-    unsigned run_kind;
+    unsigned run_kind,run_mode;
     struct desk_clipboard_client clipboard;
     unsigned char clipboard_data[DESK_CLIPBOARD_BYTES+1];
     unsigned clip_action,clip_field,context_field;
@@ -43,18 +43,22 @@ struct search_app {
 static struct search_app app;
 static const struct desk_table_column columns[]={{"Name",0,0,1},{"Kind",68,0,1},{"Size",88,1,1},{"Folder",0,0,1}};
 static const struct desk_table_column compact_columns[]={{"Name",0,0,1},{"Kind",68,0,1}};
+static const char *name_intro="Find names in a folder and its subfolders.";
+static const char *contents_intro="Contents: files up to 64 KiB, 16 MiB total, 60 seconds. Matching is literal.";
 static void rows(void);
 static void status(const char *s) { snprintf(app.status,sizeof(app.status),"%s",s);app.window.dirty=1; }
 static void parent_path(const char *path,char *parent) { (void)desk_path_parent(parent,DESK_SEARCH_PATH,path); }
 static struct desk_search_entry *selected(void) { int i=app.table.body.selected;return i>=0 && (unsigned)i<app.header.count?&app.entries[app.order[i]]:NULL; }
 static void layout(void) {
-    int w=app.window.width,h=app.window.height,busy=app.job.busy,have=selected()!=NULL,small=h<320,button_y=small?96:138,table_y=small?136:178;
+    int w=app.window.width,h=app.window.height,busy=app.job.busy,have=selected()!=NULL,small=h<320,button_y=small?106:170,table_y=small?140:210;
+    int available=!busy && !app.job.retiring_pid,contents=desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS;
     if(app.table.column_count!=(w<480?2:4)) {
         int sort=app.table.sort_column,descending=app.table.descending;desk_table_columns(&app.table,w<480?compact_columns:columns,w<480?2:4);desk_table_sort_indicator(&app.table,sort<app.table.column_count?sort:0,descending);rows();
     }
-    desk_edit_configure(&app.query,(struct desk_rect){64,12,w-76,30},&desk_font_16,1);
-    desk_edit_configure(&app.root,(struct desk_rect){64,54,w-76,30},&desk_font_16,1);
-    desk_tabs_configure(&app.tabs,small?(struct desk_rect){0}:(struct desk_rect){12,96,w-24,30},!busy && !small);
+    desk_edit_configure(&app.query,(struct desk_rect){64,small?4:12,w-76,30},&desk_font_16,1);
+    desk_edit_configure(&app.root,(struct desk_rect){64,small?38:54,w-76,30},&desk_font_16,1);
+    desk_tabs_configure(&app.mode_tabs,(struct desk_rect){12,small?72:96,w-24,30},available);
+    desk_tabs_configure(&app.tabs,(contents || small)?(struct desk_rect){0}:(struct desk_rect){12,132,w-24,30},available && !contents && !small);
     desk_button_configure(&app.search,(struct desk_rect){12,button_y,80,28},!busy && !app.job.retiring_pid);
     desk_button_configure(&app.stop,(struct desk_rect){100,button_y,64,28},busy);
     desk_button_configure(&app.open,(struct desk_rect){172,button_y,80,28},have);
@@ -87,15 +91,16 @@ static void rows(void) {
 }
 static void run(void) {
     if(app.job.busy || app.job.retiring_pid) return;
-    if(!desk_file_search_query_valid(app.query_text.data)) { status("Enter part of a file name. Matching is literal; ASCII letters ignore case.");desk_ui_focus(&app.ui,FIND_QUERY);return; }
+    unsigned mode=desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS?DESK_SEARCH_CONTENTS:DESK_SEARCH_NAME;
+    if(!desk_file_search_query_valid_mode(app.query_text.data,mode)) { status(mode==DESK_SEARCH_CONTENTS?"Enter text to find in files. Matching is literal; ASCII letters ignore case.":"Enter part of a file name. Matching is literal; ASCII letters ignore case.");desk_ui_focus(&app.ui,FIND_QUERY);return; }
     char root[DESK_SEARCH_PATH];
     if(desk_path_normalize(root,sizeof(root),app.root_text.data)) { status("Use an absolute folder path within 159 bytes.");desk_ui_focus(&app.ui,FIND_ROOT);return; }
-    char kind[2]={(char)('0'+desk_tabs_selected(&app.tabs)-FIND_ALL),0};
-    char *args[]={"deskfind-worker",root,app.query_text.data,kind,NULL};
+    char kind[2]={(char)('0'+(mode==DESK_SEARCH_CONTENTS?1:desk_tabs_selected(&app.tabs)-FIND_ALL)),0};
+    char *args[]={"deskfind-worker",root,app.query_text.data,kind,mode==DESK_SEARCH_CONTENTS?"1":NULL,NULL};
     if(desk_command_job_start(&app.job,"/fat/bin/deskfind-worker",args,app.now,60000000)) { status("The search could not start. Try again.");return; }
-    desk_text_buffer_set(&app.root_text,root,strlen(root));strcpy(app.run_root,root);strcpy(app.run_query,app.query_text.data);app.run_kind=kind[0]-'0';
-    memset(&app.header,0,sizeof(app.header));desk_table_rows(&app.table,NULL,0);status("Searching names… You can keep working in other windows.");layout();
-    desk_log("deskfind: started root=%s query=%s kind=%u\n",app.run_root,app.run_query,app.run_kind);
+    desk_text_buffer_set(&app.root_text,root,strlen(root));strcpy(app.run_root,root);strcpy(app.run_query,app.query_text.data);app.run_kind=kind[0]-'0';app.run_mode=mode;
+    memset(&app.header,0,sizeof(app.header));desk_table_rows(&app.table,NULL,0);status(mode==DESK_SEARCH_CONTENTS?"Searching file contents…":"Searching names…");layout();
+    desk_log("deskfind: started root=%s query=%s kind=%u mode=%u\n",app.run_root,app.run_query,app.run_kind,app.run_mode);
 }
 static void stop(void) {
     if(!app.job.busy) return;
@@ -105,14 +110,17 @@ static void poll_job(void) {
     uint64_t retiring=app.job.retiring_pid;int result=desk_command_job_poll(&app.job,app.now);
     if(result) {
         int count=-1;
-        if(result>0 && !app.job.exit_status && !app.job.truncated) count=desk_file_search_decode(&app.header,app.entries,app.incoming,app.job.length,app.run_root,app.run_query,app.run_kind);
+        if(result>0 && !app.job.exit_status && !app.job.truncated) count=desk_file_search_decode_mode(&app.header,app.entries,app.incoming,app.job.length,app.run_root,app.run_query,app.run_kind,app.run_mode);
         if(count<0) status(app.job.timed_out?"Search timed out after 60 seconds. Try a smaller location.":"Search did not finish. Check that the folder exists, then try again.");
         else {
             for(int i=0;i<count;i++) app.order[i]=i;
             rows();if(count) desk_list_select(&app.table.body,0);
-            snprintf(app.status,sizeof(app.status),"%u results for “%s”%s%s",app.header.count,app.run_query,app.header.flags&DESK_SEARCH_TRUNCATED?" · First 256 matches":"",app.header.skipped?" · Some paths could not be shown":"");
+            if(app.run_mode==DESK_SEARCH_NAME)
+                snprintf(app.status,sizeof(app.status),"%u results for “%s”%s%s",app.header.count,app.run_query,app.header.flags&DESK_SEARCH_TRUNCATED?" · First 256 matches":"",app.header.skipped?" · Some paths could not be shown":"");
+            else
+                snprintf(app.status,sizeof(app.status),"%s%s%s · %u results%s · %llu skipped · “%s”%s",app.header.flags&(DESK_SEARCH_BYTE_LIMIT|DESK_SEARCH_SCAN_LIMIT)?"Partial":"Complete",app.header.flags&DESK_SEARCH_BYTE_LIMIT?": reading limit":"",app.header.flags&DESK_SEARCH_SCAN_LIMIT?(app.header.flags&DESK_SEARCH_BYTE_LIMIT?", item limit":": item limit"):"",app.header.count,app.header.flags&DESK_SEARCH_TRUNCATED?" · First 256 matches":"",(unsigned long long)app.header.skipped,app.run_query,app.header.skipped?" (unreadable/non-text/large/changed)":"");
         }
-        layout();if(count>=0) desk_ui_focus(&app.ui,FIND_TABLE);desk_log("deskfind: finished result=%d exit=%llu count=%d matched=%llu skipped=%llu\n",result,(unsigned long long)app.job.exit_status,count,(unsigned long long)app.header.matched,(unsigned long long)app.header.skipped);
+        layout();if(count>=0) desk_ui_focus(&app.ui,FIND_TABLE);desk_log("deskfind: finished result=%d exit=%llu count=%d matched=%llu skipped=%llu mode=%u flags=%u\n",result,(unsigned long long)app.job.exit_status,count,(unsigned long long)app.header.matched,(unsigned long long)app.header.skipped,app.run_mode,app.header.flags);
     }
     if(retiring && !app.job.retiring_pid) layout();
 }
@@ -159,7 +167,8 @@ static void action(struct desk_action a) {
     switch(a.id) {
     case FIND_RUN:run();break;case FIND_STOP:stop();break;case FIND_TABLE:case FIND_OPEN:open_result(0);break;
     case FIND_REVEAL:open_result(1);break;case FIND_COPY:copy_path();break;case FIND_CLOSE:app.quit=1;break;
-    case FIND_ALL:case FIND_FILES:case FIND_FOLDERS:if(!app.job.busy) { desk_tabs_select(&app.tabs,a.id);layout(); }break;
+    case FIND_ALL:case FIND_FILES:case FIND_FOLDERS:if(!app.job.busy && !app.job.retiring_pid && desk_tabs_selected(&app.mode_tabs)==FIND_NAME) { desk_tabs_select(&app.tabs,a.id);layout(); }break;
+    case FIND_NAME:case FIND_CONTENTS:if(!app.job.busy && !app.job.retiring_pid) { int intro=!strcmp(app.status,name_intro) || !strcmp(app.status,contents_intro);desk_tabs_select(&app.mode_tabs,a.id);if(intro) status(a.id==FIND_CONTENTS?contents_intro:name_intro);layout(); }break;
     }
 }
 static void context(int x,int y,int keyboard) {
@@ -190,44 +199,52 @@ static void key(const struct srv_key_event *k) {
             unsigned id=k->usage==SRV_KEY_ENTER?FIND_RUN:k->usage==26?FIND_CLOSE:k->usage==21?FIND_REVEAL:k->usage==6 && app.table.body.focused?FIND_COPY:0;
             unsigned field=k->usage==9?FIND_QUERY:k->usage==15?FIND_ROOT:0;
             if(field) { desk_ui_focus(&app.ui,field);struct desk_edit *edit=editor(field);desk_text_buffer_select(edit->text,0,edit->text->length);desk_edit_reveal(edit);app.window.dirty=1;return; }
-            if(k->usage>=30 && k->usage<=32) id=FIND_ALL+k->usage-30;
+            if(k->usage>=30 && k->usage<=32) { if(k->modifiers&SRV_KEY_SHIFT) id=k->usage<=31?FIND_NAME+k->usage-30:0;else id=FIND_ALL+k->usage-30; }
             if(id) { action((struct desk_action){id,DESK_WIDGET_ACTIVATED});return; }
         }
     }
     action(desk_ui_key(&app.ui,k));
 }
 static void menus(void) {
-    unsigned disabled=selected()?0:DESK_MENU_DISABLED,busy=app.job.busy?DESK_MENU_DISABLED:0;
+    unsigned disabled=selected()?0:DESK_MENU_DISABLED,busy=(app.job.busy || app.job.retiring_pid)?DESK_MENU_DISABLED:0,kind_disabled=busy|(desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS?DESK_MENU_DISABLED:0);
     struct desk_menu_item items[]={
         {0,DESK_MENU_HEADING,"Search",""},{FIND_RUN,busy|(app.job.retiring_pid?DESK_MENU_DISABLED:0),"Search","Ctrl-Enter"},
         {FIND_STOP,app.job.busy?0:DESK_MENU_DISABLED,"Stop","Esc"},{FIND_OPEN,disabled,"Open result","Enter"},
         {FIND_REVEAL,disabled,"Show in Files","Ctrl-R"},{FIND_COPY,disabled|(app.clipboard.mode?DESK_MENU_DISABLED:0),"Copy path","Ctrl-C"},
-        {FIND_CLOSE,0,"Close window","Ctrl-W"},{0,DESK_MENU_HEADING,"Kind",""},
-        {FIND_ALL,busy|(desk_tabs_selected(&app.tabs)==FIND_ALL?DESK_MENU_CHECKED:0),"All items","Ctrl-1"},
-        {FIND_FILES,busy|(desk_tabs_selected(&app.tabs)==FIND_FILES?DESK_MENU_CHECKED:0),"Files","Ctrl-2"},
-        {FIND_FOLDERS,busy|(desk_tabs_selected(&app.tabs)==FIND_FOLDERS?DESK_MENU_CHECKED:0),"Folders","Ctrl-3"}
+        {FIND_CLOSE,0,"Close window","Ctrl-W"},{0,DESK_MENU_HEADING,"Search in",""},
+        {FIND_NAME,busy|(desk_tabs_selected(&app.mode_tabs)==FIND_NAME?DESK_MENU_CHECKED:0),"Name","Ctrl-Shift-1"},
+        {FIND_CONTENTS,busy|(desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS?DESK_MENU_CHECKED:0),"Contents (files only)","Ctrl-Shift-2"},
+        {0,DESK_MENU_HEADING,"Kind",""},
+        {FIND_ALL,kind_disabled|(desk_tabs_selected(&app.tabs)==FIND_ALL?DESK_MENU_CHECKED:0),"All items","Ctrl-1"},
+        {FIND_FILES,kind_disabled|(desk_tabs_selected(&app.tabs)==FIND_FILES?DESK_MENU_CHECKED:0),"Files","Ctrl-2"},
+        {FIND_FOLDERS,kind_disabled|(desk_tabs_selected(&app.tabs)==FIND_FOLDERS?DESK_MENU_CHECKED:0),"Folders","Ctrl-3"}
     };
     desk_app_menus(&app.window,items,sizeof(items)/sizeof(*items));desk_app_menu_tick(&app.window);
 }
 static void draw(struct desk_canvas *canvas) {
     struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *theme=&resolved;desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},theme->surface);desk_ui_draw(canvas,&app.ui,theme);
-    desk_label_draw(canvas,(struct desk_rect){12,16,48,24},&desk_font_16,"Name",theme->muted);desk_label_draw(canvas,(struct desk_rect){12,58,48,24},&desk_font_16,"In",theme->muted);
+    desk_label_draw(canvas,(struct desk_rect){12,app.window.height<320?8:16,48,24},&desk_font_16,"Find",theme->muted);desk_label_draw(canvas,(struct desk_rect){12,app.window.height<320?42:58,48,24},&desk_font_16,"In",theme->muted);
+    if(app.window.height>=320 && desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS) desk_label_draw(canvas,(struct desk_rect){12,132,canvas->width-24,24},&desk_font_16,"Files only · Up to 64 KiB per file",theme->muted);
     desk_label_ellipsis(canvas,(struct desk_rect){12,canvas->height-26,canvas->width-24,22},&desk_font_16,app.status,theme->muted);desk_popup_draw(canvas,&app.context,theme);
 }
 static void initialize(const char *root) {
-    desk_ui_init(&app.ui);desk_popup_init(&app.context);desk_tabs_init(&app.tabs);const struct desk_tab tabs[]={{FIND_ALL,"All items",0},{FIND_FILES,"Files",0},{FIND_FOLDERS,"Folders",0}};desk_tabs_items(&app.tabs,tabs,3);
+    desk_ui_init(&app.ui);desk_popup_init(&app.context);desk_tabs_init(&app.mode_tabs);const struct desk_tab modes[]={{FIND_NAME,"Name",0},{FIND_CONTENTS,"Contents",0}};desk_tabs_items(&app.mode_tabs,modes,2);desk_tabs_init(&app.tabs);const struct desk_tab tabs[]={{FIND_ALL,"All items",0},{FIND_FILES,"Files",0},{FIND_FOLDERS,"Folders",0}};desk_tabs_items(&app.tabs,tabs,3);
     desk_text_buffer_init(&app.query_text,app.query_storage[0],app.query_storage[1],sizeof(app.query_storage[0]));desk_edit_init(&app.query,&app.query_text,0);
     desk_text_buffer_init(&app.root_text,app.root_storage[0],app.root_storage[1],sizeof(app.root_storage[0]));desk_edit_init(&app.root,&app.root_text,0);
     char normalized_root[DESK_SEARCH_PATH];
     if(desk_path_normalize(normalized_root,sizeof(normalized_root),root)) root=desk_home();else root=normalized_root;
     desk_text_buffer_set(&app.root_text,root,strlen(root));desk_table_init(&app.table);desk_table_columns(&app.table,columns,4);desk_table_sort_indicator(&app.table,0,0);
     desk_command_job_init(&app.job,(char *)app.incoming,sizeof(app.incoming));desk_clipboard_init(&app.clipboard,app.clipboard_data);
-    desk_ui_add(&app.ui,FIND_QUERY,DESK_CONTROL_EDIT,&app.query,NULL);desk_ui_add(&app.ui,FIND_ROOT,DESK_CONTROL_EDIT,&app.root,NULL);desk_ui_add(&app.ui,FIND_TABS,DESK_CONTROL_TABS,&app.tabs,NULL);
+    desk_ui_add(&app.ui,FIND_QUERY,DESK_CONTROL_EDIT,&app.query,NULL);desk_ui_add(&app.ui,FIND_ROOT,DESK_CONTROL_EDIT,&app.root,NULL);desk_ui_add(&app.ui,FIND_MODE,DESK_CONTROL_TABS,&app.mode_tabs,NULL);desk_ui_add(&app.ui,FIND_TABS,DESK_CONTROL_TABS,&app.tabs,NULL);
     desk_ui_add(&app.ui,FIND_RUN,DESK_CONTROL_BUTTON,&app.search,"Search");desk_ui_add(&app.ui,FIND_STOP,DESK_CONTROL_BUTTON,&app.stop,"Stop");
     desk_ui_add(&app.ui,FIND_OPEN,DESK_CONTROL_BUTTON,&app.open,"Open");desk_ui_add(&app.ui,FIND_REVEAL,DESK_CONTROL_BUTTON,&app.reveal,"Show in Files");desk_ui_add(&app.ui,FIND_COPY,DESK_CONTROL_BUTTON,&app.copy,"Copy path");
     desk_ui_add(&app.ui,FIND_TABLE,DESK_CONTROL_TABLE,&app.table,NULL);
     desk_button_centered(&app.search,1);desk_button_centered(&app.stop,1);desk_button_centered(&app.open,1);desk_button_centered(&app.reveal,1);desk_button_centered(&app.copy,1);
-    status("Find names in a folder and its subfolders. File contents are not searched.");
+    status(name_intro);
+}
+static void close_job(void) {
+    desk_command_job_close(&app.job);
+    while(app.job.retiring_pid) { desk_command_job_poll(&app.job,app.now);if(app.job.retiring_pid) srv_sleep_ticks(1); }
 }
 int main(int argc,char **argv) {
     initialize(argc>2?argv[2]:NULL);if(desk_app_open(&app.window,"Find Files",760,500)) return 1;desk_log("deskfind: starting\n");
@@ -251,5 +268,5 @@ int main(int argc,char **argv) {
         if(app.quit || app.window.closed || app.window.failed) break;
         menus();struct desk_canvas canvas;if(desk_app_canvas(&app.window,&canvas)==1) { draw(&canvas);desk_app_present(&app.window); }srv_sleep_ticks(1);
     }
-    desk_command_job_close(&app.job);desk_app_close(&app.window);desk_log("deskfind: exited failure=%d\n",app.window.failed);return app.window.failed?1:0;
+    close_job();desk_app_close(&app.window);desk_log("deskfind: exited failure=%d\n",app.window.failed);return app.window.failed?1:0;
 }
