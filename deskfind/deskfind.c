@@ -50,14 +50,14 @@ static void status(const char *s) { snprintf(app.status,sizeof(app.status),"%s",
 static void parent_path(const char *path,char *parent) { (void)desk_path_parent(parent,DESK_SEARCH_PATH,path); }
 static struct desk_search_entry *selected(void) { int i=app.table.body.selected;return i>=0 && (unsigned)i<app.header.count?&app.entries[app.order[i]]:NULL; }
 static void layout(void) {
-    int w=app.window.width,h=app.window.height,busy=app.job.busy,have=selected()!=NULL,small=h<320,button_y=small?112:170,table_y=small?146:210;
+    int w=app.window.width,h=app.window.height,busy=app.job.busy,have=selected()!=NULL,small=h<320,button_y=small?106:170,table_y=small?140:210;
     int available=!busy && !app.job.retiring_pid,contents=desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS;
     if(app.table.column_count!=(w<480?2:4)) {
         int sort=app.table.sort_column,descending=app.table.descending;desk_table_columns(&app.table,w<480?compact_columns:columns,w<480?2:4);desk_table_sort_indicator(&app.table,sort<app.table.column_count?sort:0,descending);rows();
     }
-    desk_edit_configure(&app.query,(struct desk_rect){64,12,w-76,30},&desk_font_16,1);
-    desk_edit_configure(&app.root,(struct desk_rect){64,54,w-76,30},&desk_font_16,1);
-    desk_tabs_configure(&app.mode_tabs,(struct desk_rect){12,small?86:96,w-24,small?24:30},available);
+    desk_edit_configure(&app.query,(struct desk_rect){64,small?4:12,w-76,30},&desk_font_16,1);
+    desk_edit_configure(&app.root,(struct desk_rect){64,small?38:54,w-76,30},&desk_font_16,1);
+    desk_tabs_configure(&app.mode_tabs,(struct desk_rect){12,small?72:96,w-24,30},available);
     desk_tabs_configure(&app.tabs,(contents || small)?(struct desk_rect){0}:(struct desk_rect){12,132,w-24,30},available && !contents && !small);
     desk_button_configure(&app.search,(struct desk_rect){12,button_y,80,28},!busy && !app.job.retiring_pid);
     desk_button_configure(&app.stop,(struct desk_rect){100,button_y,64,28},busy);
@@ -223,7 +223,7 @@ static void menus(void) {
 }
 static void draw(struct desk_canvas *canvas) {
     struct desk_theme resolved=desk_app_theme(&app.window);const struct desk_theme *theme=&resolved;desk_fill(canvas,(struct desk_rect){0,0,canvas->width,canvas->height},theme->surface);desk_ui_draw(canvas,&app.ui,theme);
-    desk_label_draw(canvas,(struct desk_rect){12,16,48,24},&desk_font_16,"Find",theme->muted);desk_label_draw(canvas,(struct desk_rect){12,58,48,24},&desk_font_16,"In",theme->muted);
+    desk_label_draw(canvas,(struct desk_rect){12,app.window.height<320?8:16,48,24},&desk_font_16,"Find",theme->muted);desk_label_draw(canvas,(struct desk_rect){12,app.window.height<320?42:58,48,24},&desk_font_16,"In",theme->muted);
     if(app.window.height>=320 && desk_tabs_selected(&app.mode_tabs)==FIND_CONTENTS) desk_label_draw(canvas,(struct desk_rect){12,132,canvas->width-24,24},&desk_font_16,"Files only · Up to 64 KiB per file",theme->muted);
     desk_label_ellipsis(canvas,(struct desk_rect){12,canvas->height-26,canvas->width-24,22},&desk_font_16,app.status,theme->muted);desk_popup_draw(canvas,&app.context,theme);
 }
