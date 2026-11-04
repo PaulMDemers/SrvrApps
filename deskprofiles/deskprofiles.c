@@ -134,7 +134,7 @@ static int parse_review(void) {
         snprintf(a.uid,sizeof(a.uid),"%u",uid);snprintf(a.gid,sizeof(a.gid),"%u",gid);
     }
     snprintf(a.fingerprint,sizeof(a.fingerprint),"%s",hash);
-    snprintf(a.report_text[0],sizeof(a.report_text[0]),"%s\nProfile: %s\nIdentity: %s\nSource bundle: %s\nDestination: %s\nTotal: %u bytes",importing()?"Review import":"Review export",name,id,importing()?a.bundle:"Active profile",importing()?a.home:a.output,bytes);
+    snprintf(a.report_text[0],sizeof(a.report_text[0]),"%s\nProfile: %s\nIdentity: %s\n%s: %s\nDestination: %s\nTotal: %u bytes",importing()?"Review import":"Review export",name,id,importing()?"Source bundle":"Source",importing()?a.bundle:a.session.home,importing()?a.home:a.output,bytes);
     static const struct { const char *key,*label;const char *values[4];unsigned max; } settings[]={
         {"theme_style","Style",{"Silver","Aero","Aqua"},2},
         {"theme_accent","Accent",{"Blue","Graphite","Teal"},2},
@@ -168,7 +168,7 @@ static void poll_child(void) {
         snprintf(a.report_text[0],sizeof(a.report_text[0]),"%s",was==TRANSFERRING?"Transfer did not complete":"Review could not be prepared");
         const char *error=a.err[0]?a.err:"The profile operation could not be completed.";size_t length=strlen(error),first=length>4000?4000:length;
         memcpy(a.report_text[1],error,first);a.report_text[1][first]=0;snprintf(a.report_text[2],sizeof(a.report_text[2]),"%s%s",error+first,a.stderr_stream.truncated?"\n[Further error output was truncated.]":"");
-        snprintf(a.report_text[3],sizeof(a.report_text[3]),"%s",was!=TRANSFERRING?"Go back to check the inputs and try review again.":importing()?"If an import was interrupted, preserve the original bundle. Restart and use the existing profile chooser recovery before trying again.":"The destination may contain an incomplete exclusive output. Leave it in place and choose a fresh filename before retrying.");
+        snprintf(a.report_text[3],sizeof(a.report_text[3]),"%s",was!=TRANSFERRING?"Go back to check the inputs and try review again.":importing()?"If an import was interrupted, preserve the original bundle. Restart and use the existing profile chooser recovery before trying again.":"An incomplete bundle may remain at the destination. Keep it and choose a fresh filename before retrying.");
         struct desk_document_block b[]={{1,DESK_DOCUMENT_HEADING,a.report_text[0]},{2,DESK_DOCUMENT_PARAGRAPH,a.report_text[1]},{3,DESK_DOCUMENT_PARAGRAPH,a.report_text[2]},{4,DESK_DOCUMENT_NOTE,a.report_text[3]}};desk_document_set(&a.report,b,4);
         status("Read the details, then go back to your inputs.");trace("editing","error");if(a.diagnostic[0])desk_log("profile-ui: checkpoint=%s result=error\n",a.diagnostic);
     } else if(was==PREVIEWING) { a.state=REVIEWING;status("Review all details, then confirm or go back.");trace("reviewing","ready"); }
