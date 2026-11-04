@@ -305,6 +305,7 @@ void tool_files_finish(struct tool *t,int result) {
         else if(t->job.response.status==DESK_FILE_EXISTS) message=t->transfer_action?"The destination already contains that name. Choose another folder.":"That name already exists. Choose a different name.";
         else if(t->job.response.status==DESK_FILE_BUSY) message="The item is open in another process. Close it and try again.";
         else if(t->job.response.status==DESK_FILE_TOO_LARGE) message="This action supports individual files up to 16 MiB.";
+        else if(t->transfer_action && t->job.response.status==DESK_FILE_INVALID) message="A transfer path is unavailable. Refresh and choose an existing folder.";
         else if(t->transfer_action) message="The transfer outcome is unknown. Check both folders before retrying.";
         else if(t->job.request.operation>=DESK_FILE_RENAME) message="The change could not be verified. Refresh before retrying. Folders must be empty and the volume writable.";
         file_request_failed(t,message);return;
