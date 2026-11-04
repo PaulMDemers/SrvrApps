@@ -46,6 +46,9 @@ struct tool {
     char file_source[DESK_FILE_PATH],file_select_name[96],file_notice[80];
     struct desk_file_picker picker;
     struct desk_chooser chooser;
+    struct desk_file_entry chooser_entries[DESK_FILE_ENTRIES];
+    struct desk_list_item chooser_items[DESK_FILE_ENTRIES];
+    char chooser_details[DESK_FILE_ENTRIES][32];
     int picker_mode,dialog_separate,quit_application,close_canceled;
     struct desk_button buttons[32];
     struct desk_check checks[22];
@@ -148,6 +151,7 @@ void tool_clipboard_action(struct tool *tool,struct desk_action action);
 void tool_clipboard_result(struct tool *tool,int result);
 int tool_listing_decode(struct tool *tool);
 void tool_picker_open(struct tool *tool,int mode);
+void tool_files_transfer_accept(struct tool *tool,const char *folder);
 void tool_picker_result(struct tool *tool,struct desk_picker_result action);
 void tool_picker_finish(struct tool *tool,int result);
 void tool_picker_cancel(struct tool *tool);

@@ -78,7 +78,7 @@ static void location_commit(struct tool *t) {
     struct tool_location *location=&t->locations[t->location_index];*location=(struct tool_location){0};strcpy(location->path,t->job.request.path);
 }
 void tool_files_layout(struct tool *t) {
-    int w=t->window.width,h=t->window.height,busy=t->job.busy,sidebar=w>=640,left=sidebar?164:16;
+    int w=t->window.width,h=t->window.height,busy=t->job.busy || t->picker_mode,sidebar=w>=640,left=sidebar?164:16;
     desk_button_configure(&t->buttons[7],(struct desk_rect){16,16,64,28},!busy && t->location_index>0);
     desk_button_configure(&t->buttons[8],(struct desk_rect){88,16,80,28},!busy && t->location_index+1<t->location_count);
     desk_button_configure(&t->buttons[0],(struct desk_rect){176,16,52,28},!busy && t->saved_path[0] && strcmp(t->saved_path,"/"));
@@ -163,12 +163,11 @@ static void open_change(struct tool *t,unsigned action) {
         tool_status(t,"This action supports individual files up to 16 MiB.");return;
     }
     if(action==TOOL_COPY_TO || action==TOOL_MOVE_TO) {
-        if(desk_prompt_open(&t->prompt,action==TOOL_COPY_TO?"Copy to folder":"Move to folder",
-            "Enter an absolute destination folder. The original file name will be retained.",
-            t->saved_path,action==TOOL_COPY_TO?"Copy":"Move")) return;
-        t->prompt_mode=action;t->transfer_action=action;
-        desk_ui_window_focus(&t->ui,0);tool_layout(t);desk_prompt_focus(&t->prompt,t->window.focused);
-        desk_log("desktools: files-transfer-prompt action=%s source=%s\n",action==TOOL_COPY_TO?"copy":"move",t->file_source);return;
+        t->transfer_action=action;
+        tool_picker_open(t,DESK_PICKER_FOLDER);
+        if(!t->picker_mode) t->transfer_action=0;
+        else desk_log("desktools: files-transfer-picker action=%s source=%s\n",action==TOOL_COPY_TO?"copy":"move",t->file_source);
+        return;
     }
     char name[128];snprintf(name,sizeof(name),"%s",t->file_selected.name);
     if(action==TOOL_DUPLICATE) {
@@ -190,23 +189,25 @@ void tool_files_prompt(struct tool *t,struct desk_action a) {
     if(a.id==DESK_PROMPT_CANCEL) { t->transfer_action=0;t->transfer_folder[0]=0;close_change(t);tool_status(t,"File action canceled.");return; }
     if(a.id!=DESK_PROMPT_ACCEPT || !t->prompt_mode) return;
     char path[DESK_FILE_PATH];
-    if(t->prompt_mode==TOOL_COPY_TO || t->prompt_mode==TOOL_MOVE_TO) {
-        char folder[DESK_FILE_PATH];
-        if(normalize_path(t->prompt.text.data,folder) ||
-           desk_path_join(path,sizeof(path),folder,t->file_selected.name)) {
-            tool_status(t,"Enter a valid absolute destination folder path.");return;
-        }
-        if(!strcmp(path,t->file_source)) {tool_status(t,"Choose a different destination folder.");return;}
-        strcpy(t->transfer_folder,folder);
-        if(start_change(t,t->transfer_action==TOOL_COPY_TO?DESK_FILE_COPY:DESK_FILE_RENAME,path))
-            t->transfer_folder[0]=0;
-        return;
-    }
     if(!basename_valid(t->prompt.text.data) || child_path(t,t->prompt.text.data,path)) {
         tool_status(t,"Use a name under 96 ASCII characters, without slashes or reserved punctuation.");return;
     }
     if(!strcmp(path,t->file_source)) { close_change(t);tool_status(t,"The name was unchanged.");return; }
     start_change(t,t->prompt_mode,path);
+}
+void tool_files_transfer_accept(struct tool *t,const char *folder) {
+    char path[DESK_FILE_PATH],normalized[DESK_FILE_PATH];
+    if(!t->transfer_action || normalize_path(folder,normalized) ||
+       desk_path_join(path,sizeof(path),normalized,t->file_selected.name)) {
+        t->transfer_action=0;tool_status(t,"The destination path is too long or invalid.");return;
+    }
+    if(!strcmp(path,t->file_source)) {
+        t->transfer_action=0;tool_status(t,"Choose a different destination folder.");return;
+    }
+    strcpy(t->transfer_folder,normalized);
+    if(start_change(t,t->transfer_action==TOOL_COPY_TO?DESK_FILE_COPY:DESK_FILE_RENAME,path)) {
+        t->transfer_action=0;t->transfer_folder[0]=0;
+    }
 }
 static void open_with(struct tool *t) {
     if(!tool_files_open_with_enabled(t)) {tool_status(t,"Select a file first.");return;}
@@ -241,7 +242,7 @@ void tool_files_dialog(struct tool *t,unsigned id) {
     else if(id==1004) start_change(t,DESK_FILE_DELETE,NULL);
 }
 void tool_files_action(struct tool *t,struct desk_action a) {
-    if(t->job.busy || t->prompt_mode || t->modal || t->info_mode) return;
+    if(t->job.busy || t->prompt_mode || t->modal || t->info_mode || t->picker_mode) return;
     if(a.id==TOOL_LIST && (a.flags&DESK_WIDGET_CHANGED)) {
         for(int i=4;i<=6;i++) desk_button_configure(&t->buttons[i],t->buttons[i].frame,t->window.width>=708 && t->table.body.selected>=0);
     }
