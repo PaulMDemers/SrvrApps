@@ -151,7 +151,7 @@ void tool_runtime_init(struct tool *t,int role) {
     uint64_t timing=tool_timing_begin(role,0,"runtime-init");
     t->role=role;t->body_size=16;t->title_dirty=1;
     desk_ui_init(&t->ui);desk_dialog_init(&t->dialog);desk_prompt_init(&t->prompt);desk_picker_init(&t->picker);
-    desk_chooser_init(&t->chooser,&t->picker,&t->job,t->entries,t->items,t->details);
+    desk_chooser_init(&t->chooser,&t->picker,&t->job,t->chooser_entries,t->chooser_items,t->chooser_details);
     desk_clipboard_init(&t->clip,t->clipboard);
     desk_text_buffer_init(&t->path_text,t->path_store[0],t->path_store[1],DESK_FILE_PATH);
     desk_text_buffer_init(&t->body_text,t->body_store[0],t->body_store[1],t->role==DESK_APP_CALCULATOR?CALC_EXPRESSION_BYTES:DESK_FILE_BYTES+1);
