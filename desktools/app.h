@@ -151,6 +151,7 @@ void tool_picker_open(struct tool *tool,int mode);
 void tool_picker_result(struct tool *tool,struct desk_picker_result action);
 void tool_picker_finish(struct tool *tool,int result);
 void tool_picker_cancel(struct tool *tool);
+void tool_picker_dismiss(struct tool *tool);
 void tool_text_open_path(struct tool *tool,const char *path);
 void tool_text_save(struct tool *tool,int choose_path);
 void tool_text_save_path(struct tool *tool,const char *path);

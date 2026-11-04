@@ -294,12 +294,22 @@ static void file_request_failed(struct tool *t,const char *message) {
     }
     t->file_select_name[0]=t->file_notice[0]=0;t->transfer_action=0;t->transfer_folder[0]=0;t->location_pending=-1;
     tool_status(t,message);
+    if(t->closing) {
+        t->closing=0;desk_app_cancel_close(&t->window);
+        desk_log("window-lifecycle: close-canceled role=%d window=%llu operation=%u\n",
+            t->role,(unsigned long long)t->window.window,t->job.request.operation);
+    }
     if(t->saved_path[0]) desk_text_buffer_set(&t->path_text,t->saved_path,strlen(t->saved_path));
     tool_layout(t);
 }
 
 void tool_files_finish(struct tool *t,int result) {
-    if(t->job.request.operation==DESK_FILE_STAT) { tool_files_info_finish(t,result);return; }
+    if(t->job.request.operation==DESK_FILE_STAT) {
+        if(t->closing && (result<0 || t->job.response.status))
+            file_request_failed(t,"Could not read file information. Check the volume and try again.");
+        else tool_files_info_finish(t,result);
+        return;
+    }
     if(result<0 || t->job.response.status) {
         const char *message="Could not open or change this folder. Check the path and volume.";
         if(result<0) message=t->transfer_action?"The worker stopped; the transfer outcome is unknown. Check both folders before retrying.":"The file worker stopped. Close and reopen Files to retry.";
