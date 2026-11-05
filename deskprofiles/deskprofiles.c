@@ -168,7 +168,8 @@ static int parse_review(void) {
     };
     size_t pref_used=(size_t)snprintf(a.report_text[1],sizeof(a.report_text[1]),creating()?"Default portable preferences:\n":"Portable preferences:\n");unsigned found=0;
     for(unsigned i=0;i<sizeof(settings)/sizeof(*settings);i++) { cJSON *v=cJSON_GetObjectItemCaseSensitive(prefs,settings[i].key);unsigned value;if(!v)continue;
-        if(!integer(v,&value)||value>settings[i].max)goto bad;found++;pref_used+=(size_t)snprintf(a.report_text[1]+pref_used,sizeof(a.report_text[1])-pref_used,"%s: %s\n",settings[i].label,settings[i].values[value]); }
+        if(!integer(v,&value)||value>settings[i].max)goto bad;
+        found++;pref_used+=(size_t)snprintf(a.report_text[1]+pref_used,sizeof(a.report_text[1])-pref_used,"%s: %s\n",settings[i].label,settings[i].values[value]); }
     cJSON *v=cJSON_GetObjectItemCaseSensitive(prefs,"text_size");unsigned value;
     if(v) { if(!integer(v,&value)||(value!=16&&value!=20))goto bad;found++;pref_used+=(size_t)snprintf(a.report_text[1]+pref_used,sizeof(a.report_text[1])-pref_used,"Text size: %s\n",value==16?"Standard":"Larger"); }
     v=cJSON_GetObjectItemCaseSensitive(prefs,"clock_flags");if(v) { if(!integer(v,&value)||value>3)goto bad;found++;pref_used+=(size_t)snprintf(a.report_text[1]+pref_used,sizeof(a.report_text[1])-pref_used,"24-hour clock: %s\nShow date: %s\n",value&1?"On":"Off",value&2?"On":"Off"); }
@@ -182,7 +183,8 @@ static int parse_review(void) {
     if(total!=bytes)goto bad;
     snprintf(a.report_text[5],sizeof(a.report_text[5]),"%s%s",version==2?"Larger-document bundle: requires a desktop with streaming profile support.\n":"",creating()?"Confirm to create this profile. Select it in the next startup chooser; current apps keep their existing home.":importing()?"Confirm to import. The profile will be available in the next startup chooser.":"Selected document bytes may contain sensitive content. Confirm to create a new bundle; existing files are never overwritten.");
     struct desk_document_block b[]={{1,DESK_DOCUMENT_HEADING,a.report_text[0]},{2,DESK_DOCUMENT_PARAGRAPH,a.report_text[1]},{3,DESK_DOCUMENT_PARAGRAPH,a.report_text[2][0]?a.report_text[2]:"No documents selected."},{4,DESK_DOCUMENT_PARAGRAPH,a.report_text[3]},{5,DESK_DOCUMENT_PARAGRAPH,a.report_text[4]},{6,DESK_DOCUMENT_NOTE,a.report_text[5]}};
-    if(desk_document_set(&a.report,b,6))goto bad;cJSON_Delete(j);return 0;
+    if(desk_document_set(&a.report,b,6))goto bad;
+    cJSON_Delete(j);return 0;
 bad:cJSON_Delete(j);return -1;
 }
 static void poll_child(void) {
@@ -304,7 +306,8 @@ int main(int argc,char **argv) {
     desk_ui_add(&a.ui,ADD,DESK_CONTROL_BUTTON,&a.add,"Add");desk_ui_add(&a.ui,REMOVE,DESK_CONTROL_BUTTON,&a.remove,"Remove");desk_ui_add(&a.ui,SOURCE,DESK_CONTROL_BUTTON,&a.source,"Choose bundle");
     desk_ui_add(&a.ui,REVIEW,DESK_CONTROL_BUTTON,&a.review,"Review");desk_ui_add(&a.ui,BACK,DESK_CONTROL_BUTTON,&a.back,"Back");desk_ui_add(&a.ui,CONFIRM,DESK_CONTROL_BUTTON,&a.confirm,"Import");
     desk_ui_add(&a.ui,LIST,DESK_CONTROL_LIST,&a.list,NULL);desk_ui_add(&a.ui,REPORT,DESK_CONTROL_DOCUMENT,&a.report,NULL);rows();status("Choose a bundle and local name.");
-    if(desk_app_open(&a.window,"Profiles",760,560))return 1;desk_log("profile-ui: started pid=%llu\n",(unsigned long long)srv_getpid());trace("editing","ready");if(a.diagnostic[0])desk_log("profile-ui: diagnostic checkpoint=%s\n",a.diagnostic);
+    if(desk_app_open(&a.window,"Profiles",760,560))return 1;
+    desk_log("profile-ui: started pid=%llu\n",(unsigned long long)srv_getpid());trace("editing","ready");if(a.diagnostic[0])desk_log("profile-ui: diagnostic checkpoint=%s\n",a.diagnostic);
     while(!a.quit&&!a.window.failed&&!a.window.closed) {
         long now=srv_monotonic_us();a.now=now<0?(uint64_t)srv_ticks()*10000:(uint64_t)now;poll_child();picker_ready();
         if(!a.picker_starting&&a.file_job.busy) { int done=desk_file_job_poll(&a.file_job);if(done) { int result=desk_chooser_finish(&a.chooser,a.chooser.pending_id,done);if(result==DESK_CHOOSER_READY)desk_log("profile-ui: state=picker operation=%s result=ready\n",operation());a.window.dirty=1; } }
@@ -316,7 +319,8 @@ int main(int argc,char **argv) {
             else if(p.type==DESK_POINTER) { struct desk_widget_event e={.type=p.value&DESK_POINTER_CANCEL?DESK_WIDGET_CANCEL:DESK_WIDGET_POINTER,.x=p.x,.y=p.y,.down=(p.value&DESK_POINTER_LEFT)!=0,.pressed=(p.value&DESK_POINTER_PRESS)!=0};if(a.picker_open)picker_action(desk_picker_pointer(&a.picker,e,a.now));else action(desk_ui_pointer(&a.ui,e,a.now)); }
             else if(p.type==DESK_SCROLL) { if(a.picker_open)picker_action(desk_picker_scroll(&a.picker,p.width,p.height,p.y));else action(desk_ui_scroll(&a.ui,p.width,p.height,p.x,p.y)); }
         }
-        if(a.quit||a.window.failed||a.window.closed)break;struct desk_canvas c;if(desk_app_canvas(&a.window,&c)==1) { draw(&c);desk_app_present(&a.window); }srv_sleep_ticks(1);
+        if(a.quit||a.window.failed||a.window.closed)break;
+        struct desk_canvas c;if(desk_app_canvas(&a.window,&c)==1) { draw(&c);desk_app_present(&a.window); }srv_sleep_ticks(1);
     }
     /* A server disconnect must not abandon an accepted transaction or child. */
     a.close_pending=1;while(a.worker_active) { poll_child();if(a.worker_active)srv_sleep_ticks(1); }
