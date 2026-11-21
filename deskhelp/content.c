@@ -234,6 +234,10 @@ static const struct desk_document_block wifi_trial[]={
  H(7,"3. Unplug only Wi-Fi"),P(8,"Leave the workspace drive connected. Unplug the Wi-Fi adapter and wait a few seconds with System updating. Its list should disappear and Select network should become unavailable. Refresh should also show the missing adapter. Reconnect Wi-Fi: this one-scan trial deliberately does not rescan or restore the old list. A fresh scan will need another boot."),
  H(9,"4. Finish"),P(10,"When finished, choose Exit desktop from the SrvrOS menu. Logs save automatically and the laptop returns to Ubuntu. Report whether the list, selection, refresh and unplug handling worked, and anything you skipped. Closing Help alone does not finish the trial. If something fails, still exit the desktop so its evidence can be saved."),
  N(11,"No Wi-Fi credentials are loaded in this trial. Network association, security negotiation and Internet access are not tested here.")};
+static const struct desk_document_block wifi_managed_trial[]={
+ H(1,"Connect"),P(2,"Open System, choose Wi-Fi, select the listed network, and choose Connect. Wait for Connected before starting the network checks. The trial uses the configured access point."),
+ H(3,"Use the network and USB workspace"),P(4,"In Network Utility, use Ping and DNS Lookup. While connected, create a new test file in Text, save it to the USB workspace, and reopen it. Repeat Ping to check that the connection stayed up."),
+ H(5,"Disconnect and return"),P(6,"Close Network Utility and any apps using the network. In System, choose Disconnect and wait for Disconnected. Then choose Exit desktop to save results and return to Ubuntu. This trial checks one connection.")};
 const struct help_topic help_topics[]={
  TOPIC(1,"welcome","Welcome","Start here · applications and documents",0,welcome),
  TOPIC(2,"desktop","Your desktop","Windows · launcher · menus · calendar",0,desktop),
@@ -252,6 +256,7 @@ const struct help_topic help_topics[]={
  TOPIC(15,"network","Network Utility","Ping · DNS lookup · reports · connectivity",DESK_APP_NETWORK,network_guide),
  TOPIC(17,"laptop-trial","Laptop trial","MacBook Air · physical acceptance · checklist",0,laptop_trial),
  TOPIC(23,"wifi-trial","Wi-Fi discovery trial","Saved scan · selection · unplug · automatic return",0,wifi_trial),
+ TOPIC(24,"wifi-managed-trial","Wi-Fi connection trial","Connect · USB workspace · disconnect · return",0,wifi_managed_trial),
  TOPIC(22,"audio-io-attended","Desktop under automatic load","Audio · verified USB work · windows · dock · manual exit",0,audio_io_attended),
  TOPIC(21,"window-navigation-trial","Window navigation trial","Movement · dock · switching · keyboard · save",0,window_navigation_trial),
  TOPIC(20,"window-dock-trial","Window movement and dock trial","Offscreen movement · running apps · restore · cycle",0,window_dock_trial),

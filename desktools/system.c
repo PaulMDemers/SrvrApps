@@ -45,18 +45,36 @@ static int wifi_selectable(const struct tool *t) {
     return desk_tabs_selected(&t->system_tabs)==SYSTEM_WIFI && t->wifi_valid && (t->wifi.flags&SRV_WIFI_READY) && i>=0 && (unsigned)i<t->wifi.count &&
         (t->wifi.row[i].flags&SRV_WIFI_ROW_SELECTABLE);
 }
+static int wifi_control(const struct tool *t) {
+    return desk_tabs_selected(&t->system_tabs)==SYSTEM_WIFI && t->wifi_valid && (t->wifi.flags&SRV_WIFI_CONTROL);
+}
+static unsigned wifi_connection_state(const struct srv_wifi_snapshot *s) {
+    return s->flags&(SRV_WIFI_CONNECTING|SRV_WIFI_CONNECTED|SRV_WIFI_DISCONNECTING|SRV_WIFI_FAILED|SRV_WIFI_CLOSED);
+}
+static int wifi_can_connect(const struct tool *t) {
+    return wifi_control(t) && wifi_selectable(t) && !wifi_connection_state(&t->wifi);
+}
+static int wifi_can_disconnect(const struct tool *t) {
+    return wifi_control(t) && wifi_connection_state(&t->wifi)==SRV_WIFI_CONNECTED;
+}
 static void wifi_refresh(struct tool *t) {
     struct srv_wifi_snapshot n={0};
     int previous_valid=t->wifi_valid;
     uint64_t owner=t->wifi.owner,generation=t->wifi.generation;
     long result=srv_wifi_snapshot(owner,&n);
     if(result==SRV_WIFI_STALE && owner)result=srv_wifi_snapshot(0,&n);
+    unsigned state=wifi_connection_state(&n);
+    int control=(n.flags&SRV_WIFI_CONTROL)!=0;
     int valid=result==SRV_WIFI_OK && n.version==SRV_WIFI_VERSION && n.size==sizeof n &&
         n.count<=SRV_WIFI_ROWS && n.adapter_count<=SRV_WIFI_ADAPTERS &&
+        !(n.flags&~(SRV_WIFI_READY|SRV_WIFI_CONTROL|state)) &&
+        (!state || (control && !(state&(state-1)))) &&
+        (!control || (n.count==1 && n.owner && n.generation)) &&
         (!n.count || (n.owner && n.generation && (n.flags&SRV_WIFI_READY))) &&
         (n.selected==SRV_WIFI_NONE || n.selected<n.count);
     if(valid)for(unsigned i=0;i<n.count;i++){
-        if((n.row[i].flags&~63u) || n.row[i].index!=i || (n.row[i].channel!=1 && n.row[i].channel!=6 && n.row[i].channel!=11) ||
+        if((n.row[i].flags&~63u) || n.row[i].index!=i ||
+           (control?n.row[i].channel!=161:(n.row[i].channel!=1 && n.row[i].channel!=6 && n.row[i].channel!=11)) ||
            !memchr(n.row[i].name,0,sizeof n.row[i].name) ||
            ((n.row[i].flags&SRV_WIFI_ROW_SELECTABLE) && (n.row[i].flags&(SRV_WIFI_ROW_HIDDEN|SRV_WIFI_ROW_CONFLICT))))valid=0;
     }
@@ -69,7 +87,10 @@ static void wifi_refresh(struct tool *t) {
         const struct srv_wifi_row *r=&t->wifi.row[i];
         snprintf(t->wifi_values[i][0],40,"%u",r->channel);
         snprintf(t->wifi_values[i][1],40,"%s",r->flags&SRV_WIFI_ROW_PRIVACY?"Protected":"Open");
-        snprintf(t->wifi_values[i][2],40,"%s",r->flags&SRV_WIFI_ROW_CONFLICT?"Conflicting data":r->flags&SRV_WIFI_ROW_HIDDEN?"Name hidden":t->wifi.selected==i?"Selected":"Available");
+        snprintf(t->wifi_values[i][2],40,"%s",state==SRV_WIFI_CONNECTED?"Connected":
+            state==SRV_WIFI_CONNECTING?"Connecting":state==SRV_WIFI_DISCONNECTING?"Disconnecting":
+            state==SRV_WIFI_FAILED?"Connection failed":state==SRV_WIFI_CLOSED?"Disconnected":r->flags&SRV_WIFI_ROW_CONFLICT?"Conflicting data":
+            r->flags&SRV_WIFI_ROW_HIDDEN?"Name hidden":t->wifi.selected==i?"Selected":"Available");
         t->wifi_rows[i]=(struct desk_table_row){.id=i+1,.cells={r->flags&SRV_WIFI_ROW_HIDDEN?"Hidden network":r->name,t->wifi_values[i][0],t->wifi_values[i][1],t->wifi_values[i][2]}};
     }
     if(previous_valid!=valid || owner!=t->wifi.owner || generation!=t->wifi.generation)
@@ -261,6 +282,8 @@ void tool_system_init(struct tool *t) {
     desk_ui_add(&t->ui,SYSTEM_WIFI_TABLE,DESK_CONTROL_TABLE,&t->wifi_table,NULL);
     desk_ui_add(&t->ui,SYSTEM_WIFI_SELECT,DESK_CONTROL_BUTTON,&t->buttons[5],"Select network");
     desk_ui_add(&t->ui,SYSTEM_WIFI_ADAPTER,DESK_CONTROL_BUTTON,&t->buttons[6],"Next adapter");
+    desk_ui_add(&t->ui,SYSTEM_WIFI_CONNECT,DESK_CONTROL_BUTTON,&t->buttons[7],"Connect");
+    desk_ui_add(&t->ui,SYSTEM_WIFI_DISCONNECT,DESK_CONTROL_BUTTON,&t->buttons[8],"Disconnect");
     desk_table_init(&t->device_table);
     static const struct desk_table_column device_columns[]={{"Device",0,0,0},{"Vendor:product",132,0,0},{"Location",112,0,0},{"State",160,0,0}};
     desk_table_columns(&t->device_table,device_columns,4);
@@ -289,8 +312,11 @@ void tool_system_layout(struct tool *t) {
     desk_tabs_configure(&t->system_tabs,(struct desk_rect){16,56,w-32,32},1);
     int wifi=desk_tabs_selected(&t->system_tabs)==SYSTEM_WIFI;
     desk_table_configure(&t->wifi_table,wifi?(struct desk_rect){16,132,w-32,h>250?h-250:0}:(struct desk_rect){0},wifi);
-    desk_button_configure(&t->buttons[5],wifi?(struct desk_rect){16,h-104,164,28}:(struct desk_rect){0},wifi && wifi_selectable(t));
-    desk_button_configure(&t->buttons[6],wifi?(struct desk_rect){192,h-104,164,28}:(struct desk_rect){0},wifi && t->wifi_valid && t->wifi.adapter_count>1);
+    int controlled=wifi_control(t);
+    desk_button_configure(&t->buttons[5],wifi && !controlled?(struct desk_rect){16,h-104,164,28}:(struct desk_rect){0},!controlled && wifi_selectable(t));
+    desk_button_configure(&t->buttons[6],wifi?(struct desk_rect){controlled?244:192,h-104,controlled?124:164,28}:(struct desk_rect){0},wifi && t->wifi_valid && t->wifi.adapter_count>1);
+    desk_button_configure(&t->buttons[7],controlled?(struct desk_rect){16,h-104,100,28}:(struct desk_rect){0},wifi_can_connect(t));
+    desk_button_configure(&t->buttons[8],controlled?(struct desk_rect){124,h-104,112,28}:(struct desk_rect){0},wifi_can_disconnect(t));
     int page=desk_tabs_selected(&t->system_tabs),network=page==SYSTEM_NETWORK,devices=page==SYSTEM_DEVICES;
     desk_table_configure(&t->sensor_table,page==SYSTEM_SENSORS?(struct desk_rect){16,132,w-32,h>250?h-250:0}:(struct desk_rect){0},page==SYSTEM_SENSORS);
     struct desk_battery_controls control=desk_battery_controls(&t->battery,&t->battery_control);
@@ -307,13 +333,25 @@ void tool_system_action(struct tool *t,struct desk_action a) {
     if(a.id==SYSTEM_WIFI_TABLE && (a.flags&DESK_WIDGET_CHANGED)) { tool_system_layout(t);t->window.dirty=1; }
     if(!(a.flags&DESK_WIDGET_ACTIVATED)) return;
     if(a.id==SYSTEM_WIFI_ADAPTER && desk_tabs_selected(&t->system_tabs)==SYSTEM_WIFI) { desk_list_select(&t->wifi_table.body,-1);t->wifi.generation=0;t->wifi.owner=t->wifi.next_owner;wifi_refresh(t); }
-    if(a.id==SYSTEM_WIFI_SELECT && wifi_selectable(t)) {
+    if(a.id==SYSTEM_WIFI_SELECT && !wifi_control(t) && wifi_selectable(t)) {
         unsigned index=(unsigned)t->wifi_table.body.selected;
         struct srv_wifi_select request={.version=SRV_WIFI_VERSION,.size=sizeof request,.owner=t->wifi.owner,.generation=t->wifi.generation,.index=t->wifi.row[index].index};
         long result=srv_wifi_select(&request);
         desk_log("wifi-ui-choice: result=%ld owner=%llu generation=%llu index=%u identifiers_logged=0\n",result,(unsigned long long)request.owner,(unsigned long long)request.generation,request.index);
         wifi_refresh(t);
         snprintf(t->wifi_notice,sizeof t->wifi_notice,"%s",result==SRV_WIFI_OK?"Network selected. Wi-Fi connection is not available yet.":result==SRV_WIFI_STALE?"The network list changed. Select a network again.":"This network is unavailable. Refresh the list and try again.");
+    }
+    if((a.id==SYSTEM_WIFI_CONNECT && wifi_can_connect(t)) ||
+       (a.id==SYSTEM_WIFI_DISCONNECT && wifi_can_disconnect(t))) {
+        int connect=a.id==SYSTEM_WIFI_CONNECT;
+        struct srv_wifi_select request={.version=SRV_WIFI_VERSION,.size=sizeof request,
+            .owner=t->wifi.owner,.generation=t->wifi.generation,
+            .index=connect?t->wifi.row[t->wifi_table.body.selected].index:SRV_WIFI_NONE};
+        long result=connect?srv_wifi_connect(&request):srv_wifi_disconnect(&request);
+        wifi_refresh(t);
+        snprintf(t->wifi_notice,sizeof t->wifi_notice,"%s",result==SRV_WIFI_OK?"":
+            result==SRV_WIFI_BUSY?"A Wi-Fi request is already pending.":
+            result==SRV_WIFI_STALE?"The adapter changed. Select a network again.":"The adapter refused the request.");
     }
     if(a.id==SYSTEM_PROCESSES || a.id==SYSTEM_NETWORK || a.id==SYSTEM_DEVICES || a.id==SYSTEM_SENSORS || a.id==SYSTEM_WIFI) { desk_tabs_select(&t->system_tabs,a.id);a.id=SYSTEM_TABS; }
     if(a.id==SYSTEM_TABS) {
@@ -343,12 +381,17 @@ void tool_system_draw(struct tool *t,struct desk_canvas *c) {
     desk_label_draw(c,(struct desk_rect){16,18,c->width-(c->width>=500?352:224),30},theme->heading,"System",theme->text);
     if(desk_tabs_selected(&t->system_tabs)==SYSTEM_WIFI) {
         char state[160];
+        unsigned connection=wifi_connection_state(&t->wifi);
         if(!t->wifi_valid)snprintf(state,sizeof state,"Wi-Fi information unavailable");
         else if(!t->wifi.owner)snprintf(state,sizeof state,"No Wi-Fi discovery results available");
         else if(!(t->wifi.flags&SRV_WIFI_READY))snprintf(state,sizeof state,"Wi-Fi discovery results expired");
-        else snprintf(state,sizeof state,"%s · Adapter %llu · %u networks · Not connected",t->wifi.adapter,(unsigned long long)t->wifi.owner,t->wifi.count);
+        else snprintf(state,sizeof state,"%s · Adapter %llu · %u networks%s",t->wifi.adapter,
+            (unsigned long long)t->wifi.owner,t->wifi.count,connection==SRV_WIFI_CONNECTED?" · Connected":"");
         desk_label_draw(c,(struct desk_rect){16,98,c->width-32,26},theme->body,state,theme->text);
-        desk_label_draw(c,(struct desk_rect){16,c->height-64,c->width-32,24},theme->body,t->wifi_notice[0]?t->wifi_notice:"Refresh updates saved discovery results. Wi-Fi connection is unavailable.",theme->muted);return;
+        const char *hint=connection==SRV_WIFI_CLOSED?"Connection closed for this session.":
+            connection==SRV_WIFI_DISCONNECTING?"Waiting for active network and USB work to finish.":
+            connection?"":wifi_control(t)?"Select a network to connect.":"Refresh updates saved discovery results.";
+        desk_label_draw(c,(struct desk_rect){16,c->height-64,c->width-32,24},theme->body,t->wifi_notice[0]?t->wifi_notice:hint,theme->muted);return;
     }
     if(desk_tabs_selected(&t->system_tabs)==SYSTEM_NETWORK) {
         desk_label_draw(c,(struct desk_rect){16,98,c->width-32,26},theme->body,network_state(t),theme->text);return;
