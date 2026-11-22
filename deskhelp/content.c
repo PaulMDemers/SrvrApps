@@ -256,6 +256,12 @@ static const struct desk_document_block wifi_active_remove_trial[]={
  H(1,"Connect and wait on System > Wi-Fi"),P(2,"Open System > Wi-Fi, select Demers5, and choose Connect. Stay on that tab for at least one minute, until the Demers5 row changes from Connecting to Connected. Keep Network Utility closed. The Network tab reports link status earlier, while the timed pings are still running."),
  H(3,"Unplug the connected Wi-Fi adapter"),P(4,"Once the Demers5 row on the Wi-Fi tab says Connected, unplug only the Edimax Wi-Fi adapter. Leave the USB workspace drive attached and Wi-Fi unplugged until Ubuntu returns."),
  H(5,"Check the desktop and return"),P(6,"Confirm System no longer shows Demers5 connected. Save a new file in Text on the USB workspace and reopen it. Use Exit desktop to save the test logs and return to Ubuntu.")};
+static const struct desk_document_block retina_trial[]={
+ H(1,"1. Check the startup scale"),P(2,"Keep the USB workspace connected. This check has no deadline. Open Settings from the Dock and scroll down to Display. Before changing anything, confirm the panel is 2880 × 1800 and the scale is 2x. Check that menus, icons and text are readable and sharp. Record any difference in the Text file below."),
+ H(3,"2. Check the pointer and windows"),P(4,"Use the trackpad to select Dock icons and menus. Check that clicks land under the pointer near the edges of the display. Scroll this Help page and a Files list. Open Text, drag and resize its window, then maximize and restore it. Check that titles, buttons and content stay aligned and the pointer does not jump."),
+ H(5,"3. Compare 1x and return to 2x"),P(6,"In Settings > Display choose Change scale, then Apply. The 1x view should have smaller controls and a larger workspace. Choose Revert, or wait for the 15-second timeout. Confirm that 2x and the prior window positions return. If startup was already at 1x, leave it as found and note that result."),
+ H(7,"4. Save and reopen a proof file"),P(8,"In Text, type Retina 2x Aa09 and note any failures or skipped steps. Save a new file named retina-scaling-proof.txt in the USB workspace. Reopen it and verify the text. At 2x, press Command-Shift-3 to save a desktop screenshot and wait for the save notice. The screenshot and session logs are collected from the workspace."),
+ H(9,"5. Return to Ubuntu"),P(10,"Save any open work. Choose SrvrOS > Return to console. SrvrOS saves the session logs, safely unmounts the workspace and returns to Ubuntu automatically. Leave the drive connected. No terminal commands or photos are needed.")};
 const struct help_topic help_topics[]={
  TOPIC(1,"welcome","Welcome","Start here · applications and documents",0,welcome),
  TOPIC(2,"desktop","Your desktop","Windows · launcher · menus · calendar",0,desktop),
@@ -277,6 +283,7 @@ const struct help_topic help_topics[]={
  TOPIC(24,"wifi-managed-trial","Wi-Fi connection trial","Connect · USB workspace · disconnect · return",0,wifi_managed_trial),
  TOPIC(25,"wifi-reconnect-trial","Wi-Fi reconnect trial","Connect twice · validate traffic and USB files",0,wifi_reconnect_trial),
  TOPIC(28,"wifi-active-remove-trial","Wi-Fi sustained traffic and active removal","Connect · wait for checks · unplug · save",0,wifi_active_remove_trial),
+ TOPIC(29,"retina-trial","Retina display trial","Scale · pointer · windows · save · reboot",0,retina_trial),
  TOPIC(27,"wifi-replug-trial","Wi-Fi recovery after USB replug","Connect · reinsert · reconnect · verify traffic",0,wifi_replug_trial),
  TOPIC(26,"wifi-reattach-trial","Wi-Fi USB reattachment trial","Disconnect · reinsert · verify USB workspace",0,wifi_reattach_trial),
  TOPIC(22,"audio-io-attended","Desktop under automatic load","Audio · verified USB work · windows · dock · manual exit",0,audio_io_attended),
