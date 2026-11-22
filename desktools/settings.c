@@ -75,13 +75,19 @@ void tool_settings_audio(struct tool *t,const struct desk_packet *p) {
     }
 }
 static void display_request(struct tool *t,unsigned operation) {
-    if(t->display_pending) return;
+    /* Countdown queries are read-only. A confirmation can supersede one;
+     * its serial makes a late query reply harmless. */
+    if(t->display_pending && (t->display_operation!=DESK_DISPLAY_QUERY || operation==DESK_DISPLAY_QUERY)) return;
     struct desk_packet p=desk_packet_new(DESK_DISPLAY);
-    p.serial=++t->display_serial;p.value=operation;
+    p.serial=t->display_serial+1;p.value=operation;
     p.width=t->display_width;p.height=t->display_height;p.x=(int32_t)t->display_scale;
     p.generation=t->display_token;
-    t->display_operation=(int)operation;t->display_at=srv_ticks();t->display_pending=!desk_send(t->window.server,&p);
-    if(!t->display_pending) tool_status(t,"Display request could not be sent.");
+    int sent=desk_send(t->window.server,&p)==0;
+    if(sent || !t->display_pending) {
+        t->display_serial=p.serial;t->display_operation=(int)operation;
+        t->display_at=srv_ticks();t->display_pending=sent;
+    }
+    if(!sent)tool_status(t,"Display request could not be sent.");
 }
 void tool_settings_display(struct tool *t,const struct desk_packet *p) {
     if(p->serial && (!t->display_pending || p->serial!=t->display_serial)) return;
@@ -223,7 +229,7 @@ void tool_settings_layout(struct tool *t) {
             visible(t,row,32),t->preferences.wallpaper==(unsigned)i,1);
     }
     int py=y+(w>=372?460:532);
-    int display=py+710,ready=t->display_ready && !t->display_pending;
+    int display=py+710,ready=t->display_ready && (!t->display_pending || t->display_operation==DESK_DISPLAY_QUERY);
     int trial=t->display.phase==DESK_DISPLAY_TRIAL;
     desk_button_configure(&t->buttons[18],(struct desk_rect){24,display+72,140,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_MODE_SET) && t->display.mode_count>1 && visible(t,display+72,32));
     desk_button_configure(&t->buttons[19],(struct desk_rect){172,display+72,w-208<140?w-208:140,32},ready && !trial && (t->display.capabilities&DESK_DISPLAY_CAP_SCALE) && visible(t,display+72,32));
