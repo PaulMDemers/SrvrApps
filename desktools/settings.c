@@ -1,6 +1,7 @@
 #include "app.h"
 #include <stdio.h>
 #include <srvros/desk_log.h>
+#include <srvros/desktop_scale.h>
 #include <string.h>
 static struct desk_rect viewport(struct tool *t) { return (struct desk_rect){16,64,t->window.width-32,t->window.height-108}; }
 struct appearance_metrics { int preview_height,radio_y,chrome_height,selection_y,selection_height,button_y,button_height; };
@@ -9,8 +10,9 @@ static struct appearance_metrics appearance_metrics(struct tool *t) {
     return (struct appearance_metrics){68,108,19,26,12,43,18};
 }
 static int display_selection_fits(const struct tool *t) {
-    return t->display_scale && t->display_width>=640*t->display_scale &&
-        t->display_height>=480*t->display_scale;
+    return desk_scale_valid(t->display_scale) &&
+        desk_scale_logical(t->display_width,t->display_scale)>=640 &&
+        desk_scale_logical(t->display_height,t->display_scale)>=480;
 }
 static int visible(struct tool *t,int y,int h) {
     struct desk_rect r=viewport(t);return y>=r.y && y+h<=r.y+r.h;
@@ -85,13 +87,15 @@ void tool_settings_display(struct tool *t,const struct desk_packet *p) {
     if(p->serial && (!t->display_pending || p->serial!=t->display_serial)) return;
     struct desk_display_state next;memcpy(&next,p->text,sizeof(next));
     if(next.mode_count>DESK_DISPLAY_MODES || next.phase>DESK_DISPLAY_TRIAL ||
-       (next.scale!=1 && next.scale!=2) || !next.width || !next.height ||
-       (next.capabilities&~(DESK_DISPLAY_CAP_MODE_SET|DESK_DISPLAY_CAP_SCALE)) ||
+       !desk_scale_valid(next.scale) || !next.width || next.width>3840 || !next.height || next.height>2160 ||
+       (next.capabilities&~(DESK_DISPLAY_CAP_MODE_SET|DESK_DISPLAY_CAP_SCALE|DESK_DISPLAY_CAP_FRACTIONAL_SCALE)) ||
+       (desk_scale_fractional(next.scale) && !(next.capabilities&DESK_DISPLAY_CAP_FRACTIONAL_SCALE)) ||
        p->value>DESK_DISPLAY_FAILED || (next.phase==DESK_DISPLAY_TRIAL && !p->generation)) {
         if(p->serial) t->display_pending=0;
         tool_status(t,"Display state is unavailable.");return;
     }
-    for(unsigned i=0;i<next.mode_count;i++) if(!next.modes[i].width || !next.modes[i].height) {
+    for(unsigned i=0;i<next.mode_count;i++) if(!next.modes[i].width || next.modes[i].width>3840 ||
+        !next.modes[i].height || next.modes[i].height>2160) {
         if(p->serial) t->display_pending=0;
         tool_status(t,"Display state is unavailable.");return;
     }
@@ -288,15 +292,15 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     desk_label_draw(c,(struct desk_rect){24,sound+248,c->width-64,28},theme->body,(t->audio.capabilities&SRV_AUDIO_CAP_JACK_SENSE)?(t->audio.headphone_present?"Headphones connected.":"No headphones detected."):(t->audio.capabilities&SRV_AUDIO_CAP_HEADPHONES)?"Choose headphones after plugging them in.":audio_available(t)?"Speaker output only.":"Sound output is unavailable in this session.",theme->muted);
     int display=py+710;
     desk_label_draw(c,(struct desk_rect){24,display,c->width-64,28},theme->body,"Display",theme->text);
-    if(t->display_ready) snprintf(label,sizeof(label),"Current: %u x %u · %ux",t->display.width,t->display.height,t->display.scale);
+    if(t->display_ready) snprintf(label,sizeof(label),"Current: %u x %u · %s",t->display.width,t->display.height,desk_scale_label(t->display.scale));
     else snprintf(label,sizeof(label),"Display information unavailable");
     desk_label_draw(c,(struct desk_rect){24,display+32,c->width-64,28},theme->body,label,theme->text);
     if(t->display.phase) snprintf(label,sizeof(label),"Reverts in %u seconds",t->display.remaining_seconds);
-    else if(t->display_selection_dirty) snprintf(label,sizeof(label),"Selected: %u x %u · %ux",t->display_width,t->display_height,t->display_scale);
+    else if(t->display_selection_dirty) snprintf(label,sizeof(label),"Selected: %u x %u · %s",t->display_width,t->display_height,desk_scale_label(t->display_scale));
     else snprintf(label,sizeof(label),"%s",(t->display.capabilities&DESK_DISPLAY_CAP_MODE_SET)?"Choose display settings.":"Resolution switching unavailable.");
     desk_label_draw(c,(struct desk_rect){24,display+152,c->width-64,28},theme->body,label,theme->muted);
-    if(t->display_ready && t->display_selection_dirty && t->display_scale==2 && !display_selection_fits(t))
-        desk_label_draw(c,(struct desk_rect){24,display+184,c->width-64,28},theme->body,"2× needs at least 1280 × 960.",theme->muted);
+    if(t->display_ready && t->display_selection_dirty && !display_selection_fits(t))
+        desk_label_draw(c,(struct desk_rect){24,display+184,c->width-64,28},theme->body,"This scale needs a higher resolution.",theme->muted);
     desk_ui_draw(c,&t->ui,theme);c->clip=old;
     if(desk_scrollbar_limit(&t->settings_scroll)>0) desk_scrollbar_draw(c,&t->settings_scroll,theme);
 }
@@ -318,7 +322,11 @@ void tool_settings_action(struct tool *t,struct desk_action a) {
         i=i<t->display.mode_count?(i+1)%t->display.mode_count:0;t->display_width=t->display.modes[i].width;t->display_height=t->display.modes[i].height;
         t->display_selection_dirty=t->display_width!=t->display.width || t->display_height!=t->display.height || t->display_scale!=t->display.scale;tool_layout(t);
     } else if(activated && a.id==SETTINGS_DISPLAY_SCALE && t->buttons[19].enabled) {
-        t->display_scale=t->display_scale==1?2:1;
+        if(t->display.capabilities&DESK_DISPLAY_CAP_FRACTIONAL_SCALE) {
+            static const unsigned choices[]={1,DESK_SCALE_125,DESK_SCALE_150,DESK_SCALE_175,2};
+            unsigned i=0;while(i<4 && choices[i]!=t->display_scale)i++;
+            t->display_scale=choices[(i+1)%5];
+        } else t->display_scale=t->display_scale==1?2:1;
         t->display_selection_dirty=t->display_width!=t->display.width || t->display_height!=t->display.height || t->display_scale!=t->display.scale;tool_layout(t);
     } else if(activated && a.id==SETTINGS_DISPLAY_APPLY && t->buttons[20].enabled) { display_request(t,DESK_DISPLAY_APPLY);tool_layout(t);
     } else if(activated && a.id==SETTINGS_DISPLAY_KEEP && t->buttons[21].enabled) { display_request(t,DESK_DISPLAY_KEEP);tool_layout(t);
