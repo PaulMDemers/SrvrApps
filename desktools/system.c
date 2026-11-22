@@ -49,10 +49,11 @@ static int wifi_control(const struct tool *t) {
     return desk_tabs_selected(&t->system_tabs)==SYSTEM_WIFI && t->wifi_valid && (t->wifi.flags&SRV_WIFI_CONTROL);
 }
 static unsigned wifi_connection_state(const struct srv_wifi_snapshot *s) {
-    return s->flags&(SRV_WIFI_CONNECTING|SRV_WIFI_CONNECTED|SRV_WIFI_DISCONNECTING|SRV_WIFI_FAILED|SRV_WIFI_CLOSED);
+    return s->flags&(SRV_WIFI_CONNECTING|SRV_WIFI_CONNECTED|SRV_WIFI_DISCONNECTING|SRV_WIFI_FAILED|SRV_WIFI_CLOSED|SRV_WIFI_DISCONNECTED);
 }
 static int wifi_can_connect(const struct tool *t) {
-    return wifi_control(t) && wifi_selectable(t) && !wifi_connection_state(&t->wifi);
+    unsigned state=wifi_connection_state(&t->wifi);
+    return wifi_control(t) && wifi_selectable(t) && (!state || state==SRV_WIFI_DISCONNECTED);
 }
 static int wifi_can_disconnect(const struct tool *t) {
     return wifi_control(t) && wifi_connection_state(&t->wifi)==SRV_WIFI_CONNECTED;
@@ -89,7 +90,7 @@ static void wifi_refresh(struct tool *t) {
         snprintf(t->wifi_values[i][1],40,"%s",r->flags&SRV_WIFI_ROW_PRIVACY?"Protected":"Open");
         snprintf(t->wifi_values[i][2],40,"%s",state==SRV_WIFI_CONNECTED?"Connected":
             state==SRV_WIFI_CONNECTING?"Connecting":state==SRV_WIFI_DISCONNECTING?"Disconnecting":
-            state==SRV_WIFI_FAILED?"Connection failed":state==SRV_WIFI_CLOSED?"Disconnected":r->flags&SRV_WIFI_ROW_CONFLICT?"Conflicting data":
+            state==SRV_WIFI_FAILED?"Connection failed":state==SRV_WIFI_CLOSED || state==SRV_WIFI_DISCONNECTED?"Disconnected":r->flags&SRV_WIFI_ROW_CONFLICT?"Conflicting data":
             r->flags&SRV_WIFI_ROW_HIDDEN?"Name hidden":t->wifi.selected==i?"Selected":"Available");
         t->wifi_rows[i]=(struct desk_table_row){.id=i+1,.cells={r->flags&SRV_WIFI_ROW_HIDDEN?"Hidden network":r->name,t->wifi_values[i][0],t->wifi_values[i][1],t->wifi_values[i][2]}};
     }
@@ -389,6 +390,7 @@ void tool_system_draw(struct tool *t,struct desk_canvas *c) {
             (unsigned long long)t->wifi.owner,t->wifi.count,connection==SRV_WIFI_CONNECTED?" · Connected":"");
         desk_label_draw(c,(struct desk_rect){16,98,c->width-32,26},theme->body,state,theme->text);
         const char *hint=connection==SRV_WIFI_CLOSED?"Connection closed for this session.":
+            connection==SRV_WIFI_DISCONNECTED?"Select the network to reconnect.":
             connection==SRV_WIFI_DISCONNECTING?"Waiting for active network and USB work to finish.":
             connection?"":wifi_control(t)?"Select a network to connect.":"Refresh updates saved discovery results.";
         desk_label_draw(c,(struct desk_rect){16,c->height-64,c->width-32,24},theme->body,t->wifi_notice[0]?t->wifi_notice:hint,theme->muted);return;
