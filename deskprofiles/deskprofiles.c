@@ -89,7 +89,7 @@ static void *command_worker(void *unused) {
         if(r->mutate) { argv[n++]=r->uid;argv[n++]=r->gid;argv[n++]=r->uuid;argv[n++]=r->fingerprint; }
     } else if(r->operation==IMPORT) { argv[n++]=r->mutate?"import-reviewed":"preview-import";argv[n++]=r->bundle;argv[n++]=r->home;argv[n++]=r->alias;
         if(r->mutate) { argv[n++]=r->uid;argv[n++]=r->gid;argv[n++]=r->fingerprint; }
-    } else { argv[n++]=r->mutate?"export-auto-reviewed":"preview-export-auto";argv[n++]=r->session.home;
+    } else { argv[n++]=r->mutate?"export-reviewed":"preview-export";argv[n++]=r->session.home;
         if(r->mutate) { argv[n++]=r->output;argv[n++]=r->fingerprint; }
         for(unsigned i=0;i<r->count;i++)argv[n++]=r->docs[i];
     } argv[n]=NULL;
@@ -132,10 +132,7 @@ static int parse_review(void) {
     const char *end=NULL;cJSON *j=cJSON_ParseWithOpts(a.out,&end,0);if(!j)return -1;while(end&&(*end==' '||*end=='\n'||*end=='\r'||*end=='\t'))end++;
     const char *format=json_string(j,"format"),*op=json_string(j,"operation"),*hash=json_string(j,"sha256");
     cJSON *profile=cJSON_GetObjectItemCaseSensitive(j,"profile"),*prefs=cJSON_GetObjectItemCaseSensitive(j,"preferences"),*docs=cJSON_GetObjectItemCaseSensitive(j,"documents"),*dest=cJSON_GetObjectItemCaseSensitive(j,"destination");
-    const char *id=json_string(profile,"id"),*name=json_string(profile,"display_name");unsigned bytes=0,version=1,total=0;
-    cJSON *bundle_version=cJSON_GetObjectItemCaseSensitive(j,"bundle_version");
-    if(bundle_version&&(!integer(bundle_version,&version)||(version!=1&&version!=2)))goto bad;
-    if(creating()&&version!=1)goto bad;
+    const char *id=json_string(profile,"id"),*name=json_string(profile,"display_name");unsigned bytes=0,total=0;
     if(!end||*end||!format||strcmp(format,"srvros-profile-review-v1")||!op||strcmp(op,operation())||!hash||strlen(hash)!=64||!id||!srv_profile_session_id_valid(id)||!name||!cJSON_IsObject(prefs)||!cJSON_IsArray(docs)||cJSON_GetArraySize(docs)>LIMIT||!integer(cJSON_GetObjectItemCaseSensitive(j,"bytes"),&bytes)) goto bad;
     for(unsigned i=0;i<64;i++) if(!((hash[i]>='0'&&hash[i]<='9')||(hash[i]>='a'&&hash[i]<='f')))goto bad;
     if(importing()||creating()) { unsigned uid,gid;const char *home=json_string(dest,"home"),*alias=json_string(dest,"alias");
@@ -175,12 +172,12 @@ static int parse_review(void) {
     if(creating()&&found!=6)goto bad;
     if(!found)snprintf(a.report_text[1]+pref_used,sizeof(a.report_text[1])-pref_used,"No portable preferences in this profile.");
     memset(a.report_text[2],0,sizeof(a.report_text[2]));memset(a.report_text[3],0,sizeof(a.report_text[3]));memset(a.report_text[4],0,sizeof(a.report_text[4]));size_t used[3]={0,0,0};unsigned idx=0;
-    cJSON *d; cJSON_ArrayForEach(d,docs) { const char *path=json_string(d,"path");unsigned size;if(!path||!integer(cJSON_GetObjectItemCaseSensitive(d,"size"),&size)||size>(version==2?16777216u:1048576u)||size>(version==2?67108864u:8388608u)-total)goto bad;total+=size;
+    cJSON *d; cJSON_ArrayForEach(d,docs) { const char *path=json_string(d,"path");unsigned size;if(!path||!integer(cJSON_GetObjectItemCaseSensitive(d,"size"),&size)||size>16u*1024u*1024u||size>64u*1024u*1024u-total)goto bad;total+=size;
         int n=snprintf(a.report_text[2+idx]+used[idx],sizeof(a.report_text[2])-used[idx],"%s — %u bytes\n",path,size);
         if(n<0||(size_t)n>=sizeof(a.report_text[2])-used[idx]) { a.report_text[2+idx][used[idx]]=0;if(idx==2)goto bad;idx++;n=snprintf(a.report_text[2+idx],sizeof(a.report_text[2+idx]),"%s — %u bytes\n",path,size);if(n<0||(size_t)n>=sizeof(a.report_text[2+idx]))goto bad; }used[idx]+=(size_t)n;
     }
     if(total!=bytes)goto bad;
-    snprintf(a.report_text[5],sizeof(a.report_text[5]),"%s%s",version==2?"Larger-document bundle: requires a desktop with streaming profile support.\n":"",creating()?"Confirm to create this profile. Select it in the next startup chooser; current apps keep their existing home.":importing()?"Confirm to import. The profile will be available in the next startup chooser.":"Selected document bytes may contain sensitive content. Confirm to create a new bundle; existing files are never overwritten.");
+    snprintf(a.report_text[5],sizeof(a.report_text[5]),"%s",creating()?"Confirm to create this profile. Select it in the next startup chooser; current apps keep their existing home.":importing()?"Confirm to import. The profile will be available in the next startup chooser.":"Selected document bytes may contain sensitive content. Confirm to create a new bundle; existing files are never overwritten.");
     struct desk_document_block b[]={{1,DESK_DOCUMENT_HEADING,a.report_text[0]},{2,DESK_DOCUMENT_PARAGRAPH,a.report_text[1]},{3,DESK_DOCUMENT_PARAGRAPH,a.report_text[2][0]?a.report_text[2]:"No documents selected."},{4,DESK_DOCUMENT_PARAGRAPH,a.report_text[3]},{5,DESK_DOCUMENT_PARAGRAPH,a.report_text[4]},{6,DESK_DOCUMENT_NOTE,a.report_text[5]}};
     if(desk_document_set(&a.report,b,6))goto bad;cJSON_Delete(j);return 0;
 bad:cJSON_Delete(j);return -1;
