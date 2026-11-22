@@ -243,6 +243,10 @@ static const struct desk_document_block wifi_reconnect_trial[]={
  H(3,"Save and reopen a USB file"),P(4,"In Text, write a short note, save it as a new file on the USB workspace, then close and reopen the file. Verify the text. Leave the workspace drive and Wi-Fi adapter plugged in."),
  H(5,"Reconnect in the same session"),P(6,"Close Network Utility and any network commands. In System, choose Disconnect and wait for Disconnected. Select Demers5 again and choose Connect. Once Connected, repeat Ping, DNS Lookup, and HTTP. In Text, save and reopen a second new workspace file."),
  H(7,"Finish"),P(8,"Close network tools, choose Disconnect in System, and wait for Disconnected. Choose Exit desktop from the SrvrOS menu to save the logs and return to Ubuntu.")};
+static const struct desk_document_block wifi_reattach_trial[]={
+ H(1,"Connect and disconnect"),P(2,"In System, open Wi-Fi, select Demers5, and choose Connect. Wait for Connected and run a gateway Ping in Network Utility. Close the network tools. Choose Disconnect in System and wait for Disconnected before touching the adapter."),
+ H(3,"Unplug and reinsert Wi-Fi"),P(4,"Keep the USB workspace drive connected throughout. Unplug only the Edimax Wi-Fi adapter. Wait at least five seconds, then put it back in the same port. In System > Devices, look for the USB device with vendor 7392 and product a711 to appear again. This trial ends at USB identification and endpoint setup."),
+ H(5,"Verify the USB workspace"),P(6,"Use Text to save a new file to the USB workspace. Close, reopen, and check the file. Then choose Exit desktop in the SrvrOS menu to save the logs and return to Ubuntu. You can take as long as needed. No commands, passwords or photos are needed.")};
 const struct help_topic help_topics[]={
  TOPIC(1,"welcome","Welcome","Start here · applications and documents",0,welcome),
  TOPIC(2,"desktop","Your desktop","Windows · launcher · menus · calendar",0,desktop),
@@ -263,6 +267,7 @@ const struct help_topic help_topics[]={
  TOPIC(23,"wifi-trial","Wi-Fi discovery trial","Saved scan · selection · unplug · automatic return",0,wifi_trial),
  TOPIC(24,"wifi-managed-trial","Wi-Fi connection trial","Connect · USB workspace · disconnect · return",0,wifi_managed_trial),
  TOPIC(25,"wifi-reconnect-trial","Wi-Fi reconnect trial","Connect twice · validate traffic and USB files",0,wifi_reconnect_trial),
+ TOPIC(26,"wifi-reattach-trial","Wi-Fi USB reattachment trial","Disconnect · reinsert · verify USB workspace",0,wifi_reattach_trial),
  TOPIC(22,"audio-io-attended","Desktop under automatic load","Audio · verified USB work · windows · dock · manual exit",0,audio_io_attended),
  TOPIC(21,"window-navigation-trial","Window navigation trial","Movement · dock · switching · keyboard · save",0,window_navigation_trial),
  TOPIC(20,"window-dock-trial","Window movement and dock trial","Offscreen movement · running apps · restore · cycle",0,window_dock_trial),
