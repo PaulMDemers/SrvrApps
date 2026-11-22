@@ -60,7 +60,8 @@ static const struct desk_document_block preview[]={
  P(5,"Drag to pan a zoomed image. Scrolling and arrow keys move around it; Page Up, Page Down, Home and End offer larger movements. Transparent pixels appear over a checkerboard."),
  H(6,"Opening another image"),P(7,"Cancel or Escape stops an in-progress opening. The previous image remains visible if the new file cannot be opened. Open is available again after the canceled worker has finished closing."),
  H(8,"Supported images"),P(9,"Files may be up to 8 MiB, with at most 4,194,304 pixels and 4096 pixels along either side. Preview displays a still image and does not edit or export it."),
- N(10,"EXIF orientation, color profiles, animation and smooth resampling are not implemented yet. Some photographs may need manual rotation in another tool before opening here.")};
+ P(10,"JPEG photos follow their EXIF orientation when opened, including mirrored orientations. Photos with absent or invalid orientation metadata display in their stored orientation."),
+ N(11,"Preview displays still images without color management and scales with nearest-neighbor sampling.")};
 static const struct desk_document_block settings[]={
  T(1,"Settings"),P(2,"Choose a comfortable text size, wallpaper, clock format and trackpad speed. Preferences are shared with open applications."),
  H(3,"Appearance"),P(4,"Standard and Larger adjust the desktop body text. Sage, Sand and Slate change the desktop wallpaper color. Applications reflow their controls where space permits."),
