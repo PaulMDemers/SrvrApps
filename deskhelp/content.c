@@ -253,8 +253,8 @@ static const struct desk_document_block wifi_replug_trial[]={
  H(5,"Reconnect and check the workspace"),P(6,"The Edimax adapter should reappear in System > Devices. Wait for Demers5 to reappear under Wi-Fi as firmware reloads and the radio calibrates. Select it and choose Connect. SrvrOS repeats the traffic checks automatically. While connected, confirm System > Devices lists USB Wi-Fi as Driver active. Use Text to save and reopen a new file on the USB workspace."),
  H(7,"Finish and save results"),P(8,"Choose Disconnect in System and wait for Disconnected. Then choose Exit desktop from the SrvrOS menu to save the logs and return to Ubuntu. Take as long as needed. No passwords, commands or photos are needed.")};
 static const struct desk_document_block wifi_active_remove_trial[]={
- H(1,"Connect and wait for traffic checks"),P(2,"In System, open Wi-Fi, select Demers5, and choose Connect. SrvrOS checks DHCP, ping and DNS, then sends 60 gateway pings over one minute. Wait for Connected. Keep other network apps closed."),
- H(3,"Unplug the connected Wi-Fi adapter"),P(4,"Leave the USB workspace drive connected. While System still says Connected, unplug only the Edimax Wi-Fi adapter. Leave Wi-Fi unplugged until Ubuntu returns."),
+ H(1,"Connect and wait on System > Wi-Fi"),P(2,"Open System > Wi-Fi, select Demers5, and choose Connect. Stay on that tab for at least one minute, until the Demers5 row changes from Connecting to Connected. Keep Network Utility closed. The Network tab reports link status earlier, while the timed pings are still running."),
+ H(3,"Unplug the connected Wi-Fi adapter"),P(4,"Once the Demers5 row on the Wi-Fi tab says Connected, unplug only the Edimax Wi-Fi adapter. Leave the USB workspace drive attached and Wi-Fi unplugged until Ubuntu returns."),
  H(5,"Check the desktop and return"),P(6,"Confirm System no longer shows Demers5 connected. Save a new file in Text on the USB workspace and reopen it. Use Exit desktop to save the test logs and return to Ubuntu.")};
 const struct help_topic help_topics[]={
  TOPIC(1,"welcome","Welcome","Start here · applications and documents",0,welcome),
