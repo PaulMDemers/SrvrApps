@@ -160,6 +160,7 @@ static const char *device_name(const struct srv_device_info *d) {
         if(d->flags&SRV_DEVICE_TRACKPAD) return "Trackpad";
         if(d->flags&SRV_DEVICE_KEYBOARD) return "Keyboard";
         if(d->flags&SRV_DEVICE_POINTER) return "Pointer";
+        if(d->flags&SRV_DEVICE_WIFI) return "USB Wi-Fi";
         if(d->flags&SRV_DEVICE_NETWORK) return "USB Ethernet";
         if(d->flags&SRV_DEVICE_STORAGE) return "USB storage";
         if(d->class_code==9) return "USB hub";
@@ -197,7 +198,7 @@ static void devices_refresh(struct tool *t,int force) {
             else { snprintf(values[2],64,"USB %u · %u",d.port,d.device);t->device_usb_count++; }
             const char *state="Detected";
             if(kind==SRV_DEVICE_USB) {
-                unsigned active=SRV_DEVICE_KEYBOARD|SRV_DEVICE_POINTER|SRV_DEVICE_TRACKPAD|SRV_DEVICE_STORAGE|SRV_DEVICE_HUB|SRV_DEVICE_NETWORK;
+                unsigned active=SRV_DEVICE_KEYBOARD|SRV_DEVICE_POINTER|SRV_DEVICE_TRACKPAD|SRV_DEVICE_STORAGE|SRV_DEVICE_HUB|SRV_DEVICE_NETWORK|SRV_DEVICE_WIFI;
                 state=(d.flags&SRV_DEVICE_FAILED)?"Device error":(d.flags&active)?"Driver active":
                     (d.flags&SRV_DEVICE_CONFIGURED)?"Configured":"No active driver";
             }
