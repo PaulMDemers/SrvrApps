@@ -244,6 +244,11 @@ static const struct desk_document_block wifi_reconnect_trial[]={
  H(3,"Save and reopen a USB file"),P(4,"In Text, write a short note, save it as a new file on the USB workspace, then close and reopen the file. Verify the text. Leave the workspace drive and Wi-Fi adapter plugged in."),
  H(5,"Reconnect in the same session"),P(6,"Close Network Utility and any network commands. In System, choose Disconnect and wait for Disconnected. Select Demers5 again and choose Connect. Once Connected, repeat Ping, DNS Lookup, and HTTP. In Text, save and reopen a second new workspace file."),
  H(7,"Finish"),P(8,"Close network tools, choose Disconnect in System, and wait for Disconnected. Choose Exit desktop from the SrvrOS menu to save the logs and return to Ubuntu.")};
+static const struct desk_document_block wifi_realtek_trial[]={
+ H(1,"Connect to Demers2.4"),P(2,"In System, open Wi-Fi and choose Realtek USB Wi-Fi if the adapter selector is shown. Select Demers2.4 on channel 10 and choose Connect. Wait for Connected. SrvrOS checks DHCP, a gateway ping, and DNS on each connection."),
+ H(3,"Check the USB workspace"),P(4,"While connected, use Text to save a new file on the USB workspace. Close and reopen it to verify the contents. Keep the hub, all three adapters, and the workspace drive attached."),
+ H(5,"Disconnect and reconnect"),P(6,"Close any network tools. Choose Disconnect in System and wait for Disconnected. Select Demers2.4 and choose Connect again. Once Connected, reopen the Text file and verify it again."),
+ H(7,"Save the results"),P(8,"Choose Disconnect again, then choose Exit desktop from the SrvrOS menu. If Connect fails, still exit through the desktop so the logs can be saved. SrvrOS returns to Ubuntu automatically. No commands or passwords are needed.")};
 static const struct desk_document_block wifi_reattach_trial[]={
  H(1,"Connect and disconnect"),P(2,"In System, open Wi-Fi, select Demers5, and choose Connect. Wait for Connected and run a gateway Ping in Network Utility. Close the network tools. Choose Disconnect in System and wait for Disconnected before touching the adapter."),
  H(3,"Unplug and reinsert Wi-Fi"),P(4,"Keep the USB workspace drive connected throughout. Unplug only the Edimax Wi-Fi adapter. Wait at least five seconds, then put it back in the same port. In System > Devices, look for the USB device with vendor 7392 and product a711 to appear again. This trial ends at USB identification and endpoint setup."),
@@ -289,6 +294,7 @@ const struct help_topic help_topics[]={
  TOPIC(23,"wifi-trial","Wi-Fi discovery trial","Saved scan · selection · unplug · automatic return",0,wifi_trial),
  TOPIC(24,"wifi-managed-trial","Wi-Fi connection trial","Connect · USB workspace · disconnect · return",0,wifi_managed_trial),
  TOPIC(25,"wifi-reconnect-trial","Wi-Fi reconnect trial","Connect twice · validate traffic and USB files",0,wifi_reconnect_trial),
+ TOPIC(31,"wifi-realtek-trial","Realtek Demers2.4 trial","Connect · disconnect · reconnect · save",0,wifi_realtek_trial),
  TOPIC(28,"wifi-active-remove-trial","Wi-Fi sustained traffic and active removal","Connect · wait for checks · unplug · save",0,wifi_active_remove_trial),
  TOPIC(29,"retina-trial","Retina fractional scaling trial","Scale · pointer · windows · save · reboot",0,retina_trial),
  TOPIC(30,"sound-trial","Sound controls and unplug during playback","Volume · mute · output · active unplug",0,sound_trial),
