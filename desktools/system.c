@@ -75,7 +75,7 @@ static void wifi_refresh(struct tool *t) {
         (n.selected==SRV_WIFI_NONE || n.selected<n.count);
     if(valid)for(unsigned i=0;i<n.count;i++){
         if((n.row[i].flags&~63u) || n.row[i].index!=i ||
-           (control?n.row[i].channel!=161:(n.row[i].channel!=1 && n.row[i].channel!=6 && n.row[i].channel!=11)) ||
+           !n.row[i].channel || n.row[i].channel>196 ||
            !memchr(n.row[i].name,0,sizeof n.row[i].name) ||
            ((n.row[i].flags&SRV_WIFI_ROW_SELECTABLE) && (n.row[i].flags&(SRV_WIFI_ROW_HIDDEN|SRV_WIFI_ROW_CONFLICT))))valid=0;
     }
@@ -350,6 +350,8 @@ void tool_system_action(struct tool *t,struct desk_action a) {
             .owner=t->wifi.owner,.generation=t->wifi.generation,
             .index=connect?t->wifi.row[t->wifi_table.body.selected].index:SRV_WIFI_NONE};
         long result=connect?srv_wifi_connect(&request):srv_wifi_disconnect(&request);
+        desk_log("wifi-ui-control: action=%s result=%ld generation=%llu\n",
+            connect?"connect":"disconnect",result,(unsigned long long)request.generation);
         wifi_refresh(t);
         snprintf(t->wifi_notice,sizeof t->wifi_notice,"%s",result==SRV_WIFI_OK?"":
             result==SRV_WIFI_BUSY?"A Wi-Fi request is already pending.":
