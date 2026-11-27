@@ -332,7 +332,11 @@ int main(int argc,char **argv) {
     else if(t->role==DESK_APP_SETTINGS) tool_settings_init(t);
     else if(t->role==DESK_APP_SYSTEM) {
         tool_system_init(t);
-        if(argc==3 && !strcmp(argv[2],"--battery-controls")) {desk_tabs_select(&t->system_tabs,SYSTEM_SENSORS);tool_system_layout(t);desk_ui_layout_changed(&t->ui);}
+        if(argc==3 && (!strcmp(argv[2],"--battery-controls") || !strcmp(argv[2],"--sensors"))) {
+            desk_tabs_select(&t->system_tabs,SYSTEM_SENSORS);
+            tool_system_layout(t);desk_ui_layout_changed(&t->ui);
+            desk_log("desktools: system-page=sensors\n");
+        }
     }
     tool_timing_end(t->role,t->window.window,"role-init",timing);
     while(!t->quit && !t->window.failed && !t->window.closed) {

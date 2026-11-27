@@ -243,7 +243,8 @@ static void sensors_refresh(struct tool *t,int force) {
         }
     }
     desk_table_rows(&t->sensor_table,t->sensor_rows,9);
-    if(force) desk_log("desktools: sensors-refresh valid=%d fresh=%d state=%u flags=%u samples=%llu\n",t->thermal_valid,t->thermal_fresh,s.state,s.flags,(unsigned long long)s.samples);
+    if(force) desk_log("desktools: sensors-refresh valid=%d fresh=%d state=%u flags=%u samples=%llu fan-state=%u fan-fresh=%d fan-samples=%llu\n",
+        t->thermal_valid,t->thermal_fresh,s.state,s.flags,(unsigned long long)s.samples,fan.state,t->smc_fresh,(unsigned long long)fan.samples);
 }
 static void battery_refresh(struct tool *t,int force) {
     uint64_t now=srv_ticks();if(!force && now-t->battery_refresh_tick<25)return;
