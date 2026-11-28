@@ -197,6 +197,7 @@ void tool_settings_init(struct tool *t) {
     desk_ui_add(&t->ui,SETTINGS_DISPLAY_APPLY,DESK_CONTROL_BUTTON,&t->buttons[20],"Apply");
     desk_ui_add(&t->ui,SETTINGS_DISPLAY_KEEP,DESK_CONTROL_BUTTON,&t->buttons[21],"Keep");
     desk_ui_add(&t->ui,SETTINGS_DISPLAY_REVERT,DESK_CONTROL_BUTTON,&t->buttons[22],"Revert");
+    desk_ui_add(&t->ui,SETTINGS_WIFI,DESK_CONTROL_BUTTON,&t->buttons[23],"Wi-Fi");
     tool_status(t,"Loading saved preferences…");
 }
 void tool_settings_layout(struct tool *t) {
@@ -221,6 +222,7 @@ void tool_settings_layout(struct tool *t) {
     desk_check_configure(&t->checks[2],(struct desk_rect){24,y+172,w-64,30},visible(t,y+172,30),(t->preferences.clock_flags&DESK_CLOCK_24H)!=0,0);
     desk_check_configure(&t->checks[3],(struct desk_rect){24,y+208,w-64,30},visible(t,y+208,30),(t->preferences.clock_flags&DESK_CLOCK_DATE)!=0,0);
     desk_edit_configure(&t->name,(struct desk_rect){24,y+284,112,34},&desk_font_16,visible(t,y+284,34));
+    desk_button_configure(&t->buttons[23],(struct desk_rect){w-112,16,88,30},1);
     desk_button_configure(&t->buttons[0],(struct desk_rect){148,y+285,w>=372?112:w-184,32},visible(t,y+285,32));
     desk_button_configure(&t->buttons[1],(struct desk_rect){272,y+285,64,32},visible(t,y+285,32) && w>=372);
     for(int i=0;i<3;i++) {
@@ -308,6 +310,7 @@ void tool_settings_draw(struct tool *t,struct desk_canvas *c) {
     if(t->display_ready && t->display_selection_dirty && !display_selection_fits(t))
         desk_label_draw(c,(struct desk_rect){24,display+184,c->width-64,28},theme->body,"This scale needs a higher resolution.",theme->muted);
     desk_ui_draw(c,&t->ui,theme);c->clip=old;
+    desk_button_draw(c,&t->buttons[23],"Wi-Fi",theme);
     if(desk_scrollbar_limit(&t->settings_scroll)>0) desk_scrollbar_draw(c,&t->settings_scroll,theme);
 }
 static void request(struct tool *t,const struct desk_preferences *value,unsigned mask) {
@@ -323,7 +326,8 @@ static void request(struct tool *t,const struct desk_preferences *value,unsigned
 void tool_settings_action(struct tool *t,struct desk_action a) {
     int activated=(a.flags&DESK_WIDGET_ACTIVATED)!=0;
     struct desk_preferences value=t->preferences;
-    if(activated && a.id==SETTINGS_DISPLAY_MODE && t->buttons[18].enabled) {
+    if(activated && a.id==SETTINGS_WIFI) tool_launch(t,DESK_APP_SETTINGS,"--wifi");
+    else if(activated && a.id==SETTINGS_DISPLAY_MODE && t->buttons[18].enabled) {
         unsigned i=0;while(i<t->display.mode_count && (t->display.modes[i].width!=t->display_width || t->display.modes[i].height!=t->display_height)) i++;
         i=i<t->display.mode_count?(i+1)%t->display.mode_count:0;t->display_width=t->display.modes[i].width;t->display_height=t->display.modes[i].height;
         t->display_selection_dirty=t->display_width!=t->display.width || t->display_height!=t->display.height || t->display_scale!=t->display.scale;tool_layout(t);

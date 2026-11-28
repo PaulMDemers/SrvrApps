@@ -45,7 +45,8 @@ void tool_layout(struct tool *t) {
         tool_calculator_layout(t);
     } else if(t->role==DESK_APP_SYSTEM) {
         tool_system_layout(t);
-    } else if(t->role==DESK_APP_SETTINGS) {
+    } else if(t->settings_wifi) tool_wifi_layout(t);
+    else if(t->role==DESK_APP_SETTINGS) {
         tool_settings_pointer(t,(struct desk_widget_event){.type=DESK_WIDGET_CANCEL});tool_settings_layout(t);
     }
     desk_ui_layout_changed(&t->ui);
@@ -62,6 +63,7 @@ void tool_dispatch(struct tool *t,struct desk_action a) {
     }
     else if(t->role==DESK_APP_FILES) tool_files_action(t,a);
     else if(t->role==DESK_APP_CALCULATOR) tool_calculator_action(t,a);
+    else if(t->settings_wifi) tool_wifi_action(t,a);
     else if(t->role==DESK_APP_SETTINGS) tool_settings_action(t,a);
     else if(t->role==DESK_APP_SYSTEM) tool_system_action(t,a);
 }
@@ -69,7 +71,7 @@ static void key(struct tool *t,const struct srv_key_event *k) {
     if(tool_command_key(t,k))return;
     if(t->info_mode) { tool_files_info_key(t,k);return; }
     if(desk_popup_active(&t->context)) { tool_context_result(t,desk_popup_key(&t->context,k));return; }
-    if(t->role==DESK_APP_SETTINGS && (k->flags&SRV_KEY_DOWN_EVENT) &&
+    if(t->role==DESK_APP_SETTINGS && !t->settings_wifi && (k->flags&SRV_KEY_DOWN_EVENT) &&
         !(k->modifiers&(SRV_KEY_CTRL|SRV_KEY_ALT|SRV_KEY_META)) &&
         (k->usage==SRV_KEY_PAGEUP || k->usage==SRV_KEY_PAGEDOWN)) {
         tool_settings_scroll(t,(t->window.height-108)*(k->usage==SRV_KEY_PAGEUP?-1:1));return;
@@ -119,9 +121,10 @@ static void draw(struct tool *t,struct desk_canvas *c) {
     if(t->info_mode) { tool_files_info_draw(t,c);return; }
     struct desk_theme resolved=desk_app_theme(&t->window);const struct desk_theme *theme=&resolved;
     desk_fill(c,(struct desk_rect){0,0,c->width,c->height},theme->surface);
-    if(t->role==DESK_APP_SETTINGS) tool_settings_draw(t,c);else if(t->role==DESK_APP_FILES) tool_files_draw(t,c);else desk_ui_draw(c,&t->ui,theme);
+    if(t->role==DESK_APP_SETTINGS && !t->settings_wifi) tool_settings_draw(t,c);else if(t->role==DESK_APP_FILES) tool_files_draw(t,c);else desk_ui_draw(c,&t->ui,theme);
     if(t->search_open) desk_searchbar_draw(c,&t->search,theme);
-    if(t->role==DESK_APP_CALCULATOR) tool_calculator_draw(t,c);
+    if(t->settings_wifi) tool_wifi_draw(t,c);
+    else if(t->role==DESK_APP_CALCULATOR) tool_calculator_draw(t,c);
     else if(t->role==DESK_APP_SYSTEM) {
         tool_system_draw(t,c);
     }
@@ -189,9 +192,9 @@ void tool_runtime_event(struct tool *t,struct desk_packet p) {
     if(p.type==DESK_CLIPBOARD_ACK || p.type==DESK_CLIPBOARD_DATA) {
         int result=desk_clipboard_receive(&t->clip,&p);if(result) tool_clipboard_result(t,result);
     } else if(p.type==DESK_CONFIGURE) { tool_layout(t);if(t->role==DESK_APP_TEXT || t->role==DESK_APP_CALCULATOR) desk_ui_focus(&t->ui,TOOL_BODY); }
-    else if(p.type==DESK_DISPLAY_STATE && t->role==DESK_APP_SETTINGS) tool_settings_display(t,&p);
-    else if(p.type==DESK_AUDIO && t->role==DESK_APP_SETTINGS) tool_settings_audio(t,&p);
-    else if(p.type==DESK_BRIGHTNESS && t->role==DESK_APP_SETTINGS) tool_settings_brightness(t,&p);
+    else if(p.type==DESK_DISPLAY_STATE && t->role==DESK_APP_SETTINGS && !t->settings_wifi) tool_settings_display(t,&p);
+    else if(p.type==DESK_AUDIO && t->role==DESK_APP_SETTINGS && !t->settings_wifi) tool_settings_audio(t,&p);
+    else if(p.type==DESK_BRIGHTNESS && t->role==DESK_APP_SETTINGS && !t->settings_wifi) tool_settings_brightness(t,&p);
     else if(p.type==DESK_PREFERENCES) {
         if(t->role==DESK_APP_SETTINGS) tool_settings_receive(t,&p);
         else {
@@ -200,9 +203,9 @@ void tool_runtime_event(struct tool *t,struct desk_packet p) {
         }
     } else if(p.type==DESK_CONTEXT) tool_context_open(t,p.x,p.y,p.value!=0);
     else if(p.type==DESK_FOCUS) {
-        if(t->role==DESK_APP_SETTINGS && p.value) t->brightness_refresh=1;
+        if(t->role==DESK_APP_SETTINGS && !t->settings_wifi && p.value) t->brightness_refresh=1;
         if(!p.value) desk_popup_cancel(&t->context);
-        if(t->role==DESK_APP_SETTINGS && !p.value) tool_settings_pointer(t,(struct desk_widget_event){.type=DESK_WIDGET_CANCEL});
+        if(t->role==DESK_APP_SETTINGS && !t->settings_wifi && !p.value) tool_settings_pointer(t,(struct desk_widget_event){.type=DESK_WIDGET_CANCEL});
         if(t->info_mode) desk_ui_window_focus(&t->info_ui,p.value!=0);else if(t->prompt_mode) desk_prompt_focus(&t->prompt,p.value!=0);else if(t->picker_mode) desk_picker_focus(&t->picker,p.value!=0);else if(t->modal) desk_dialog_focus(&t->dialog,p.value!=0);else tool_content_focus(t,p.value!=0);t->window.dirty=1;
     } else if(p.type==DESK_MENU_ACTION) tool_menu_action(t,p.value);
     else if(p.type==DESK_KEY) {
@@ -214,7 +217,7 @@ void tool_runtime_event(struct tool *t,struct desk_packet p) {
             .x=p.x,.y=p.y,.down=(p.value&DESK_POINTER_LEFT)!=0,.pressed=(p.value&DESK_POINTER_PRESS)!=0};
         if(t->info_mode) { tool_files_info_action(t,desk_ui_pointer(&t->info_ui,e,srv_monotonic_us()));return; }
         if(desk_popup_active(&t->context)) { tool_context_result(t,desk_popup_pointer(&t->context,e));return; }
-        if(t->role==DESK_APP_SETTINGS && tool_settings_pointer(t,e)) return;
+        if(t->role==DESK_APP_SETTINGS && !t->settings_wifi && tool_settings_pointer(t,e)) return;
         if(t->prompt_mode) { tool_files_prompt(t,desk_prompt_pointer(&t->prompt,e,srv_monotonic_us()));return; }
         if(t->picker_mode) { tool_picker_result(t,desk_picker_pointer(&t->picker,e,srv_monotonic_us()));return; }
         if(t->search_open && !t->modal) {
@@ -228,7 +231,7 @@ void tool_runtime_event(struct tool *t,struct desk_packet p) {
     } else if(p.type==DESK_SCROLL && !t->modal && !t->prompt_mode) {
         if(t->info_mode) tool_files_info_action(t,desk_ui_scroll(&t->info_ui,p.width,p.height,p.x,p.y));
         else if(desk_popup_active(&t->context)) tool_context_result(t,desk_popup_scroll(&t->context,p.y));
-        else if(t->role==DESK_APP_SETTINGS) tool_settings_scroll(t,p.y);
+        else if(t->role==DESK_APP_SETTINGS && !t->settings_wifi) tool_settings_scroll(t,p.y);
         else if(t->picker_mode) tool_picker_result(t,desk_picker_scroll(&t->picker,p.width,p.height,p.y));
         else tool_dispatch(t,desk_ui_scroll(&t->ui,p.width,p.height,p.x,p.y));
     }
@@ -314,6 +317,7 @@ int main(int argc,char **argv) {
     }
     unsigned captured=0;uint64_t logged_job=0;
     struct desk_file_pool pool;struct desk_file_channel channels[2];
+    t->settings_wifi=t->role==DESK_APP_SETTINGS && argc==3 && !strcmp(argv[2],"--wifi");
     int pooled=t->role==DESK_APP_FILES;
     tool_runtime_init(t,t->role);
     uint64_t timing=tool_timing_begin(t->role,0,"pool-init");
@@ -329,6 +333,7 @@ int main(int argc,char **argv) {
     if(t->role==DESK_APP_TEXT) tool_text_init(t,!coexist && argc>2?argv[2]:"");
     else if(t->role==DESK_APP_FILES) tool_files_init(t,argc>2?argv[2]:"");
     else if(t->role==DESK_APP_CALCULATOR) tool_calculator_init(t);
+    else if(t->settings_wifi) tool_wifi_init(t);
     else if(t->role==DESK_APP_SETTINGS) tool_settings_init(t);
     else if(t->role==DESK_APP_SYSTEM) {
         tool_system_init(t);
@@ -340,7 +345,9 @@ int main(int argc,char **argv) {
     }
     tool_timing_end(t->role,t->window.window,"role-init",timing);
     while(!t->quit && !t->window.failed && !t->window.closed) {
-        if(t->role==DESK_APP_SETTINGS) tool_settings_tick(t);
+        if(t->settings_wifi && srv_ticks()-t->refresh_tick>=100) {
+            t->refresh_tick=srv_ticks();tool_wifi_refresh(t);
+        } else if(t->role==DESK_APP_SETTINGS && !t->settings_wifi) tool_settings_tick(t);
         if(desk_clipboard_tick(&t->clip,srv_ticks())<0) tool_clipboard_result(t,-1);
         for(unsigned n=0;n<32;n++) {
             struct desk_packet p;int r=desk_app_poll(&t->window,&p);

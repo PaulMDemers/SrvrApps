@@ -18,7 +18,7 @@ enum tool_action { TOOL_NEW=1,TOOL_OPEN,TOOL_SAVE,TOOL_PATH,TOOL_BODY,TOOL_UP,TO
 #define TOOL_OPEN_WITH_CHOICE_BASE 1100u
 enum { SYSTEM_TABLE=40,SYSTEM_PAUSE,SYSTEM_REFRESH,SYSTEM_TABS,SYSTEM_NETWORK_TABLE,SYSTEM_PROCESSES,SYSTEM_NETWORK,SYSTEM_DIAGNOSTICS,SYSTEM_DEVICES,SYSTEM_DEVICE_TABLE,SYSTEM_SENSORS,SYSTEM_SENSOR_TABLE,SYSTEM_BATTERY_START,SYSTEM_BATTERY_STOP,SYSTEM_WIFI,SYSTEM_WIFI_TABLE,SYSTEM_WIFI_SELECT,SYSTEM_WIFI_ADAPTER,SYSTEM_WIFI_CONNECT,SYSTEM_WIFI_DISCONNECT };
 enum { SETTINGS_POINTER_SPEED=100,SETTINGS_POINTER_ACCELERATION,SETTINGS_BRIGHTNESS,SETTINGS_DISABLE_WHILE_TYPING,SETTINGS_TAP_CLICK,SETTINGS_TWO_FINGER_TAP,SETTINGS_AUDIO_VOLUME,SETTINGS_AUDIO_SPEAKERS,SETTINGS_AUDIO_HEADPHONES,SETTINGS_AUDIO_TEST,SETTINGS_AUDIO_STOP };
-enum { SETTINGS_DISPLAY_MODE=200,SETTINGS_DISPLAY_SCALE,SETTINGS_DISPLAY_APPLY,SETTINGS_DISPLAY_KEEP,SETTINGS_DISPLAY_REVERT };
+enum { SETTINGS_DISPLAY_MODE=200,SETTINGS_DISPLAY_SCALE,SETTINGS_DISPLAY_APPLY,SETTINGS_DISPLAY_KEEP,SETTINGS_DISPLAY_REVERT,SETTINGS_WIFI };
 enum { SETTINGS_ACCENT_BLUE=400,SETTINGS_ACCENT_GRAPHITE,SETTINGS_ACCENT_TEAL,SETTINGS_GLASS_SOLID,SETTINGS_GLASS_SUBTLE,SETTINGS_GLASS_CLEAR,SETTINGS_STYLE_SILVER,SETTINGS_STYLE_AERO,SETTINGS_STYLE_AQUA };
 enum { CALC_EVALUATE=70,CALC_CLEAR,CALC_USE,CALC_COPY,CALC_HISTORY,CALC_KEY_FIRST=300 };
 #define CALC_HISTORY_LIMIT 16
@@ -97,7 +97,7 @@ struct tool {
     struct desk_table_row wifi_rows[SRV_WIFI_ROWS];
     char wifi_values[SRV_WIFI_ROWS][3][40];
     char wifi_notice[160];
-    int wifi_valid;
+    int wifi_valid, settings_wifi;
     struct desk_table device_table;
     struct desk_table_row device_rows[160];
     char device_values[160][4][64];
@@ -137,6 +137,11 @@ void tool_calculator_draw(struct tool *tool,struct desk_canvas *canvas);
 void tool_calculator_action(struct tool *tool,struct desk_action action);
 int tool_calculator_key(struct tool *tool,const struct srv_key_event *key);
 void tool_battery_capture_tick(struct tool *tool);
+void tool_wifi_init(struct tool *tool);
+void tool_wifi_layout(struct tool *tool);
+void tool_wifi_refresh(struct tool *tool);
+void tool_wifi_draw(struct tool *tool,struct desk_canvas *canvas);
+void tool_wifi_action(struct tool *tool,struct desk_action action);
 void tool_system_init(struct tool *tool);
 void tool_system_layout(struct tool *tool);
 void tool_system_refresh(struct tool *tool,int force);
